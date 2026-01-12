@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>DocuMint | Terminal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; overflow-x: hidden; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .hidden { display: none; }
+       
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+
+        .transition-all { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+       
+        .modal-backdrop {
+            background-color: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+
+        .sidebar-expanded { width: 260px; }
+        .sidebar-collapsed { width: 80px; }
+
+
+        .college-card.active {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+
+        /* Year Selector Styles */
+        .year-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            z-index: 50;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            margin-top: 8px;
+            padding: 8px;
+        }
+        .year-dropdown.show { display: block; }
+        .year-grid-item {
+            padding: 12px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.875rem;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .year-grid-item:hover { background-color: #f1f5f9; color: #2563eb; }
+        .year-grid-item.selected { background-color: #2563eb; color: white; }
+    </style>
+</head>
+
+
+<body class="text-slate-800">
+
+
+    <div id="dashboard-view" class="min-h-screen flex">
+       
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="sidebar-expanded bg-white border-r border-slate-200 flex flex-col transition-all duration-300 z-30 sticky top-0 h-screen shrink-0">
+            <div class="p-6 flex items-center justify-between border-b border-slate-100">
+                <div id="sidebar-logo" class="flex items-center gap-3 overflow-hidden">
+                    <div class="bg-blue-600 p-2 rounded-lg text-white shrink-0">
+                        <i data-lucide="receipt" class="w-5 h-5"></i>
+                    </div>
+                    <h2 class="font-black text-slate-900 tracking-tight text-xl sidebar-text">DocuMint</h2>
+                </div>
+                <button onclick="toggleSidebar()" class="p-2 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
+                    <i id="sidebar-toggle-icon" data-lucide="chevron-left" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+
+            <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scroll">
+    <a href="dashboard.html" class="flex items-center gap-4 p-3 bg-blue-50 text-blue-600 rounded-xl font-bold transition-all group">
+        <i data-lucide="layout-dashboard" class="w-5 h-5 shrink-0"></i>
+        <span class="sidebar-text whitespace-nowrap">Dashboard</span>
+    </a>
+
+    <a href="student.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
+        <i data-lucide="users" class="w-5 h-5 shrink-0"></i>
+        <span class="sidebar-text whitespace-nowrap">Students & Payments</span>
+    </a>
+
+    <a href="add_fees.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
+        <i data-lucide="credit-card" class="w-5 h-5 shrink-0"></i>
+        <span class="sidebar-text whitespace-nowrap">Fees Management</span>
+    </a>
+
+    <a href="report.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
+        <i data-lucide="file-text" class="w-5 h-5 shrink-0"></i>
+        <span class="sidebar-text whitespace-nowrap">Reports</span>
+    </a>
+
+
+
+</nav>
+
+<div class="mt-auto p-4 space-y-2">
+    <!-- Settings Button -->
+    <button onclick="window.location.href='settings.html'" class="w-full flex items-center gap-4 p-3 text-blue-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-bold transition-all">
+        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+        <span class="sidebar-text">Settings</span>
+    </button>
+
+    <!-- Log Out Button -->
+    <button onclick="window.location.href='login.html'" class="w-full flex items-center gap-4 p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl font-bold transition-all">
+        <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
+        <span class="sidebar-text">Log Out</span>
+    </button>
+</div>
+
+
+          
+        </aside>
+
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scroll">
+            <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between z-20 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-400 font-medium">Dashboard</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>
+                    <span class="text-slate-900 font-bold">System Overview</span>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                      <div class="p-4 border-t border-slate-100">
+                <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl overflow-hidden">
+                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold shrink-0">AD</div>
+                    <div class="sidebar-text overflow-hidden">
+                        <p class="text-xs font-black text-slate-900 truncate">ADMINISTRATOR</p>
+                        <p class="text-[10px] text-blue-600 font-bold uppercase truncate">System Head</p>
+                    </div>
+                </div>
+            </div>
+                  
+                </div>
+            </header>
+
+
+            <main class="p-8 max-w-7xl w-full mx-auto space-y-8">
+               
+                <!-- Filters Section -->
+                <section class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-6 items-end">
+                    <!-- Academic Year Calendar Selector -->
+                    <div class="flex-1 min-w-[300px] relative">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Select Academic Year</label>
+                        <button onclick="toggleYearDropdown()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 flex items-center justify-between group transition-all">
+                            <div class="flex items-center gap-3">
+                                <i data-lucide="calendar" class="w-5 h-5 text-blue-600"></i>
+                                <span id="current-ay-display" class="font-bold text-slate-700">A.Y. 2025 - 2026</span>
+                            </div>
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors"></i>
+                        </button>
+                       
+                        <div id="year-dropdown" class="year-dropdown">
+                            <div class="p-2 border-b border-slate-100 mb-2 flex items-center justify-between">
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Choose Start Year</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-1" id="year-grid">
+                                <!-- Years generated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="flex-1 min-w-[240px]">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Semester</label>
+                        <select id="semester-select" onchange="updateDashboard()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-bold text-slate-700">
+                            <option>1st Semester</option>
+                            <option>2nd Semester</option>
+                            <option>Summer</option>
+                        </select>
+                    </div>
+                </section>
+
+
+                <!-- College Unit Navigation -->
+                <section>
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">College Unit View</label>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        <button onclick="selectCollege('ALL')" id="college-ALL" class="college-card active bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
+                            <p class="text-xs font-black text-slate-900">ALL</p>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Overview</p>
+                        </button>
+                        <button onclick="selectCollege('CED')" id="college-CED" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
+                            <p class="text-xs font-black text-slate-900">CED</p>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Education</p>
+                        </button>
+                        <button onclick="selectCollege('CAS')" id="college-CAS" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
+                            <p class="text-xs font-black text-slate-900">CAS</p>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Arts & Sci</p>
+                        </button>
+                        <button onclick="selectCollege('CBA')" id="college-CBA" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
+                            <p class="text-xs font-black text-slate-900">CBA</p>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Business</p>
+                        </button>
+                        <button onclick="selectCollege('CEAC')" id="college-CEAC" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
+                            <p class="text-xs font-black text-slate-900">CEAC</p>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Engineering</p>
+                        </button>
+                        <button onclick="selectCollege('CHS')" id="college-CHS" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
+                            <p class="text-xs font-black text-slate-900">CHS</p>
+                            <p class="text-[9px] text-slate-400 font-bold uppercase mt-1">Health Sci</p>
+                        </button>
+                    </div>
+                </section>
+
+
+                <!-- Stats and Table -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <!-- Chart Section -->
+                    <div class="lg:col-span-5 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
+                        <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-8 self-start flex items-center gap-2">
+                            <i data-lucide="pie-chart" class="w-4 h-4"></i> Payment Percentage
+                        </h3>
+                        <div class="relative w-full max-w-[280px]">
+                            <canvas id="paymentChart"></canvas>
+                        </div>
+                        <div class="mt-10 grid grid-cols-2 gap-4 w-full">
+                            <div class="p-5 bg-blue-50 rounded-2xl border border-blue-100 cursor-pointer hover:bg-blue-100 transition-all text-center" onclick="filterListByStatus('Paid')">
+                                <p class="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Paid Students</p>
+                                <p id="stat-paid" class="text-3xl font-black text-blue-700">0</p>
+                            </div>
+                            <div class="p-5 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all text-center" onclick="filterListByStatus('Unpaid')">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Unpaid Students</p>
+                                <p id="stat-unpaid" class="text-3xl font-black text-slate-700">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Student Preview Table -->
+                    <div class="lg:col-span-7 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+                        <div class="flex justify-between items-center mb-8">
+                            <div>
+                                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">
+                                    Ledger Preview
+                                </h3>
+                                <p class="text-[10px] text-blue-600 font-bold mt-1 uppercase">Selection: <span id="preview-college-label">ALL</span> / <span id="preview-status-label">All Statuses</span></p>
+                            </div>
+                            <button id="show-all-btn" onclick="openFullListModal()" class="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg hover:bg-slate-800 transition-all shadow-sm">View Full Ledger</button>
+                        </div>
+                       
+                        <div class="flex-1">
+                            <table class="w-full text-left">
+                                <thead>
+                                    <tr class="text-[10px] text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                        <th class="pb-4 font-black">Full Name</th>
+                                        <th class="pb-4 font-black">College</th>
+                                        <th class="pb-4 font-black text-right">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="student-preview-body" class="text-sm">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+
+    <!-- MODAL -->
+    <div id="full-list-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop">
+        <div class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-8 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900 tracking-tight">Student Ledger Records</h2>
+                    <p class="text-xs text-blue-600 font-bold uppercase tracking-widest mt-1" id="modal-subtitle"></p>
+                </div>
+                <button onclick="closeFullListModal()" class="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                    <i data-lucide="x" class="w-6 h-6 text-slate-400"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-8 custom-scroll">
+                <table class="w-full text-left border-separate border-spacing-y-2">
+                    <thead class="sticky top-0 bg-white z-10">
+                        <tr class="text-[10px] text-slate-400 uppercase tracking-widest">
+                            <th class="px-4 pb-4">ID</th>
+                            <th class="px-4 pb-4">Name</th>
+                            <th class="px-4 pb-4">College</th>
+                            <th class="px-4 pb-4 text-right">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-table-body" class="text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- State ---
+        let selectedCollege = 'ALL';
+        let currentStatusFilter = 'All';
+        let selectedYear = 2025;
+        let chartInstance = null;
+        let sidebarExpanded = true;
+
+
+        const COLLEGES = ['CED', 'CAS', 'CBA', 'CEAC', 'CHS'];
+        const NAMES = ['Aldrin Santos', 'Beatriz Cruz', 'Charlie Mendoza', 'Diana Ross', 'Ethan Hunt', 'Fiona Gallagher', 'George Miller', 'Hannah Abbott', 'Ivan Drago', 'Julia Roberts', 'Kevin Hart', 'Lana Del Rey', 'Mike Tyson', 'Nina Simone', 'Oscar Isaac', 'Peter Parker', 'Quinn Fabray', 'Rachel Green', 'Steve Rogers', 'Tony Stark'];
+
+
+        const database = Array.from({length: 120}, (_, i) => ({
+            id: `2025-${String(i+1).padStart(4, '0')}`,
+            name: NAMES[i % NAMES.length] + (i > NAMES.length ? ` ${i}` : ''),
+            college: COLLEGES[i % COLLEGES.length],
+            status: Math.random() > 0.4 ? 'Paid' : 'Unpaid'
+        }));
+
+
+        // --- Calendar Picker Logic ---
+        function initYearGrid() {
+            const grid = document.getElementById('year-grid');
+            grid.innerHTML = '';
+            for (let y = 2020; y <= 2030; y++) {
+                const item = document.createElement('div');
+                item.className = `year-grid-item ${y === selectedYear ? 'selected' : ''}`;
+                item.innerText = y;
+                item.onclick = (e) => { e.stopPropagation(); selectYear(y); };
+                grid.appendChild(item);
+            }
+        }
+
+
+        function toggleYearDropdown() { document.getElementById('year-dropdown').classList.toggle('show'); }
+        function selectYear(year) {
+            selectedYear = year;
+            document.getElementById('current-ay-display').innerText = `A.Y. ${year} - ${year + 1}`;
+            document.getElementById('year-dropdown').classList.remove('show');
+            initYearGrid();
+            updateDashboard();
+        }
+
+
+        // --- Sidebar ---
+        function toggleSidebar() {
+            sidebarExpanded = !sidebarExpanded;
+            const sb = document.getElementById('sidebar');
+            const icon = document.getElementById('sidebar-toggle-icon');
+            sb.classList.toggle('sidebar-expanded', sidebarExpanded);
+            sb.classList.toggle('sidebar-collapsed', !sidebarExpanded);
+            icon.setAttribute('data-lucide', sidebarExpanded ? 'chevron-left' : 'menu');
+            document.querySelectorAll('.sidebar-text').forEach(t => t.classList.toggle('hidden', !sidebarExpanded));
+            lucide.createIcons();
+        }
+
+
+        // --- Core Logic ---
+        function selectCollege(code) {
+            selectedCollege = code;
+            currentStatusFilter = 'All';
+            document.querySelectorAll('.college-card').forEach(c => c.classList.remove('active'));
+            document.getElementById(`college-${code}`).classList.add('active');
+            updateDashboard();
+        }
+
+
+        function filterListByStatus(status) {
+            currentStatusFilter = status;
+            updateDashboard();
+        }
+
+
+        function updateDashboard() {
+            document.getElementById('preview-college-label').innerText = selectedCollege;
+            document.getElementById('preview-status-label').innerText = currentStatusFilter;
+
+
+            const filteredByCollege = database.filter(s => selectedCollege === 'ALL' || s.college === selectedCollege);
+            const paidCount = filteredByCollege.filter(s => s.status === 'Paid').length;
+            const unpaidCount = filteredByCollege.length - paidCount;
+
+
+            document.getElementById('stat-paid').innerText = paidCount;
+            document.getElementById('stat-unpaid').innerText = unpaidCount;
+
+
+            renderChart(paidCount, unpaidCount);
+           
+            const listData = filteredByCollege.filter(s => currentStatusFilter === 'All' || s.status === currentStatusFilter);
+            renderTable(listData);
+        }
+
+
+        function renderTable(data) {
+            const tbody = document.getElementById('student-preview-body');
+            tbody.innerHTML = '';
+            data.slice(0, 5).forEach(s => {
+                tbody.innerHTML += `
+                    <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                        <td class="py-5 font-bold text-slate-700">${s.name}</td>
+                        <td class="py-5 text-slate-500 font-mono text-xs">${s.college}</td>
+                        <td class="py-5 text-right">
+                            <span class="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${s.status === 'Paid' ? 'bg-blue-100 text-blue-600' : 'bg-red-50 text-red-500'}">
+                                ${s.status}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById('show-all-btn').classList.toggle('hidden', data.length <= 5);
+        }
+
+
+        function renderChart(paid, unpaid) {
+            const ctx = document.getElementById('paymentChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+            const total = paid + unpaid;
+            const pct = total > 0 ? Math.round((paid/total)*100) : 0;
+
+
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [paid, unpaid],
+                        backgroundColor: ['#2563eb', '#f1f5f9'],
+                        borderWidth: 0,
+                        cutout: '82%'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { tooltip: { enabled: true } },
+                    onClick: (_, el) => { if(el.length) filterListByStatus(el[0].index === 0 ? 'Paid' : 'Unpaid'); }
+                },
+                plugins: [{
+                    id: 'text',
+                    afterDraw: (c) => {
+                        const {ctx, width, height} = c;
+                        ctx.save();
+                        ctx.font = 'bold 24px Inter';
+                        ctx.fillStyle = '#1e293b';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(`${pct}%`, width/2, height/2);
+                        ctx.restore();
+                    }
+                }]
+            });
+        }
+
+
+        function openFullListModal() {
+            const data = database.filter(s => (selectedCollege === 'ALL' || s.college === selectedCollege) && (currentStatusFilter === 'All' || s.status === currentStatusFilter));
+            document.getElementById('modal-subtitle').innerText = `${selectedCollege} Unit | ${currentStatusFilter} Status`;
+            const tbody = document.getElementById('modal-table-body');
+            tbody.innerHTML = data.map(s => `
+                <tr class="bg-slate-50/50 hover:bg-white border border-transparent hover:border-slate-200 transition-all rounded-lg">
+                    <td class="p-5 font-mono text-xs text-blue-600 font-bold">${s.id}</td>
+                    <td class="p-5 font-bold text-slate-800">${s.name}</td>
+                    <td class="p-5 text-slate-500 font-semibold uppercase text-xs">${s.college}</td>
+                    <td class="p-5 text-right">
+                        <span class="px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider ${s.status === 'Paid' ? 'bg-blue-100 text-blue-600' : 'bg-red-50 text-red-500'}">${s.status}</span>
+                    </td>
+                </tr>
+            `).join('');
+            document.getElementById('full-list-modal').classList.remove('hidden');
+        }
+
+
+        function closeFullListModal() { document.getElementById('full-list-modal').classList.add('hidden'); }
+
+
+        window.onclick = (e) => { if(!e.target.closest('.relative')) document.getElementById('year-dropdown').classList.remove('show'); };
+       
+        window.onload = () => {
+            initYearGrid();
+            updateDashboard();
+            lucide.createIcons();
+        };
+    </script>
+</body>
+</html>
+
+
+
