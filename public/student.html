@@ -150,7 +150,7 @@
 </div>
                     <div class="sidebar-text">
                         <p id="user-role" class="text-xs font-black text-slate-900">ADMINISTRATOR</p>
-                        <p class="text-[10px] text-blue-600 font-bold uppercase">Administrator</p>
+                        <p class="text-[10px] text-blue-600 font-bold uppercase">Cashier Office</p>
                     </div>
                 </div>
             </div>
@@ -481,7 +481,7 @@
             document.getElementById('pay-student-name').innerText = `${activeStudent.name} (${activeStudent.id})`;
             document.getElementById('rec-student').innerText = activeStudent.name;
             
-            const issuerName = document.getElementById('current-user-name').innerText;
+            const issuerName = document.getElementById('user-role').innerText;
             document.getElementById('rec-issuer-name').innerText = issuerName;
             
             // Reset checkboxes and total
