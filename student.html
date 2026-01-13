@@ -17,6 +17,8 @@
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         .sidebar-expanded { width: 260px; }
+        .sidebar-collapsed { width: 80px; }
+
 
         /* --- PRINT STYLES: CRITICAL FIX FOR SINGLE PAGE --- */
         @media print {
@@ -88,6 +90,7 @@
                 filter: none; 
             }
         }
+        
 
     </style>
 </head>
@@ -103,7 +106,12 @@
                     <div class="bg-blue-600 p-2 rounded-lg text-white shrink-0"><i data-lucide="receipt" class="w-5 h-5"></i></div>
                     <h2 class="font-black text-slate-900 tracking-tight text-xl">DocuMint</h2>
                 </div>
+                <!-- SIDEBAR TOGGLE -->
+    <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-slate-100 transition">
+        <i id="sidebar-toggle-icon" data-lucide="chevron-left" class="w-5 h-5"></i>
+    </button>
             </div>
+
            <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scroll">
                 <a href="dashboard.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
                     <i data-lucide="layout-dashboard" class="w-5 h-5 shrink-0"></i>
@@ -137,7 +145,9 @@
 </div>
             <div class="p-4 border-t border-slate-100">
                 <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl">
-                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold">AD</div>
+                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold">
+    <i data-lucide="user" class="w-6 h-6"></i>
+</div>
                     <div class="sidebar-text">
                         <p id="current-user-name" class="text-xs font-black text-slate-900">ADMINISTRATOR</p>
                         <p class="text-[10px] text-blue-600 font-bold uppercase">Cashier Office</p>
@@ -146,27 +156,7 @@
             </div>
         </aside>
         <!-- MAIN CONTENT -->
-  <div class="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scroll">
-            <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between z-20 shrink-0">
-                <div class="flex items-center gap-2">
-                    <span class="text-slate-400 font-medium">Students & Payments</span>
-                </div>
-                
-                
-                <div class="flex items-center gap-4">
-                      <div class="p-4 border-t border-slate-100">
-                <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl overflow-hidden">
-                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold shrink-0">AD</div>
-                    <div class="sidebar-text overflow-hidden">
-                        <p class="text-xs font-black text-slate-900 truncate">ADMINISTRATOR</p>
-                        <p class="text-[10px] text-blue-600 font-bold uppercase truncate">System Head</p>
-                    </div>
-                </div>
-            </div>
-                  
-                </div>
-            </header>
-
+  
 
             <main class="px-6 pb-6 max-w-8xl w-full mx-auto">
  
@@ -564,8 +554,8 @@
                   <div class="text-center mb-6">
     <!-- Logos side by side -->
     <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 8px;">
-        <img src="right-logo.jpg" alt="Left Logo" style="height: 50px; width: 50px; object-fit: contain;">
-        <img src="left-logo.png" alt="Right Logo" style="height: 50px; width: 50px; object-fit: contain;">
+        <img src="assets/right-logo.jpg" alt="Left Logo" style="height: 50px; width: 50px; object-fit: contain;">
+        <img src="assets/left-logo.png" alt="Right Logo" style="height: 50px; width: 50px; object-fit: contain;">
     </div>
 
     <!-- Centered Title and Subtitle -->
@@ -621,6 +611,29 @@
     const modal = document.getElementById(id);
     modal.classList.toggle('hidden'); // Adds/removes the 'hidden' class
 }
+// --- Sidebar State ---
+let sidebarExpanded = true;
+
+function toggleSidebar() {
+    sidebarExpanded = !sidebarExpanded;
+
+    const sidebar = document.getElementById('sidebar');
+    const icon = document.getElementById('sidebar-toggle-icon');
+
+    sidebar.classList.toggle('sidebar-expanded', sidebarExpanded);
+    sidebar.classList.toggle('sidebar-collapsed', !sidebarExpanded);
+
+    document.querySelectorAll('.sidebar-text')
+        .forEach(el => el.classList.toggle('hidden', !sidebarExpanded));
+
+    icon.setAttribute(
+        'data-lucide',
+        sidebarExpanded ? 'chevron-left' : 'menu'
+    );
+
+    lucide.createIcons();
+}
+
 
     </script>
 </body>

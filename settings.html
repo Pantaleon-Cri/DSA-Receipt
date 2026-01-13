@@ -5,7 +5,6 @@
     <title>DocuMint | Terminal</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -19,7 +18,9 @@
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         .sidebar-expanded { width: 260px; }
+        .sidebar-collapsed { width: 80px; }
     </style>
+    
 </head>
 
 
@@ -35,6 +36,14 @@
                     <div class="bg-blue-600 p-2 rounded-lg text-white shrink-0"><i data-lucide="receipt" class="w-5 h-5"></i></div>
                     <h2 class="font-black text-slate-900 tracking-tight text-xl">DocuMint</h2>
                 </div>
+                <div class="flex items-center gap-3">
+    <!-- SIDEBAR TOGGLE -->
+    <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-slate-100 transition">
+        <i id="sidebar-toggle-icon" data-lucide="chevron-left" class="w-5 h-5"></i>
+    </button>
+
+</div>
+
             </div>
 
 <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scroll">
@@ -76,40 +85,32 @@
         <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
         <span class="sidebar-text">Log Out</span>
     </button>
+        
+</div><div class="p-4 border-t border-slate-100">
+    <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl overflow-hidden">
+<div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold">
+    <i data-lucide="user" class="w-6 h-6"></i>
+</div>
+
+        <div class="sidebar-text overflow-hidden">
+            <p class="text-xs font-black text-slate-900 truncate">ADMINISTRATOR</p>
+            <p class="text-[10px] text-blue-600 font-bold uppercase truncate">System Head</p>
+        </div>
+    </div>
 </div>
         </aside>
 
 
         <!-- MAIN CONTENT -->
  <div class="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scroll">
-            <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between z-20 shrink-0">
-                <div class="flex items-center gap-2">
-                    <span class="text-slate-400 font-medium">Settings</span>
-                </div>
-                
-                
-                <div class="flex items-center gap-4">
-                      <div class="p-4 border-t border-slate-100">
-                <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl overflow-hidden">
-                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold shrink-0">AD</div>
-                    <div class="sidebar-text overflow-hidden">
-                        <p class="text-xs font-black text-slate-900 truncate">ADMINISTRATOR</p>
-                        <p class="text-[10px] text-blue-600 font-bold uppercase truncate">System Head</p>
-                    </div>
-                </div>
-            </div>
-                  
-                </div>
-            </header>
-
-
-            <main class="px-6 pb-6 max-w-8xl w-full mx-auto">
+ 
+            <main class="px-2 pb-2 max-w-8xl w-full mx-auto">
  
         <div class="flex-1 flex flex-col min-w-0 overflow-y-auto">
 
            
             <!-- SETTINGS VIEW (PORTRAIT LAYOUT) -->
-            <div id="tab-settings" class="max-w-4xl mx-auto w-full p-8 space-y-8">
+            <div id="tab-settings" class="max-w-6xl mx-auto w-full p-5 space-y-6">
                 <header>
                     <h1 class="text-2xl font-black text-slate-900">Settings</h1>
                     <p class="text-sm text-slate-500 font-medium">Manage accounts and security access control</p>
@@ -286,6 +287,29 @@
             renderStaff();
             lucide.createIcons();
         };
+        // --- Sidebar State ---
+let sidebarExpanded = true;
+
+function toggleSidebar() {
+    sidebarExpanded = !sidebarExpanded;
+
+    const sidebar = document.getElementById('sidebar');
+    const icon = document.getElementById('sidebar-toggle-icon');
+
+    sidebar.classList.toggle('sidebar-expanded', sidebarExpanded);
+    sidebar.classList.toggle('sidebar-collapsed', !sidebarExpanded);
+
+    document.querySelectorAll('.sidebar-text')
+        .forEach(el => el.classList.toggle('hidden', !sidebarExpanded));
+
+    icon.setAttribute(
+        'data-lucide',
+        sidebarExpanded ? 'chevron-left' : 'menu'
+    );
+
+    lucide.createIcons();
+}
+
     </script>
 </body>
 </html>
