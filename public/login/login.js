@@ -109,7 +109,7 @@ function handleLogin(e) {
       }));
 
       // Redirect to dashboard
-      window.location.href = "dashboard.html";
+      window.location.href = "../dashboard/dashboard.html";
     } else {
       state.loginError = data.message || "Invalid ID or Password";
       updateUI();
