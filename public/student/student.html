@@ -1,396 +1,448 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <title>DocuMint | Terminal</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>DocuMint | Terminal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <link rel="stylesheet" href="student.css">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-
-  
+  <link rel="stylesheet" href="student.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 
 <body class="text-slate-800">
+  <div class="min-h-screen flex">
 
-    <div class="min-h-screen flex">
-        
-        <!-- SIDEBAR (Not shown when printing) -->
-        <aside id="sidebar" class="sidebar-expanded bg-white border-r border-slate-200 flex flex-col transition-all duration-300 z-30 sticky top-0 h-screen shrink-0">
-            <div class="p-6 flex items-center justify-between border-b border-slate-100">
-                <div class="flex items-center gap-3 overflow-hidden">
-                    <div class="bg-blue-600 p-2 rounded-lg text-white shrink-0"><i data-lucide="receipt" class="w-5 h-5"></i></div>
-                    <h2 class="font-black text-slate-900 tracking-tight text-xl">DocuMint</h2>
-                </div>
-                <!-- SIDEBAR TOGGLE -->
-    <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-slate-100 transition">
-        <i id="sidebar-toggle-icon" data-lucide="chevron-left" class="w-5 h-5"></i>
-    </button>
-            </div>
-
-           <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scroll">
-                <a href="dashboard.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
-                    <i data-lucide="layout-dashboard" class="w-5 h-5 shrink-0"></i>
-                    <span class="sidebar-text whitespace-nowrap">Dashboard</span>
-                </a>
-                <a href="student.html" class="flex items-center gap-4 p-3 bg-blue-50 text-blue-600 rounded-xl font-bold transition-all group">
-    <i data-lucide="users" class="w-5 h-5 shrink-0"></i>
-    <span class="sidebar-text whitespace-nowrap">Students & Payments</span>
-</a>
-                <a href="/add_fees/add_fees.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
-                    <i data-lucide="credit-card" class="w-5 h-5 shrink-0"></i>
-                    <span class="sidebar-text whitespace-nowrap">Fees Management</span>
-                </a>
-                <a href="report.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
-                    <i data-lucide="file-text" class="w-5 h-5 shrink-0"></i>
-                    <span class="sidebar-text whitespace-nowrap">Reports</span>
-                </a>
-            </nav>
-            <div class="mt-auto p-4 space-y-2">
-    <!-- Settings Button -->
-    <button onclick="window.location.href='settings.html'" class="w-full flex items-center gap-4 p-3 text-blue-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-bold transition-all">
-        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
-        <span class="sidebar-text">Settings</span>
-    </button>
-
-    <!-- Log Out Button -->
-    <button onclick="window.location.href='login.html'" class="w-full flex items-center gap-4 p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl font-bold transition-all">
-        <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
-        <span class="sidebar-text">Log Out</span>
-    </button>
-</div>
-            <div class="p-4 border-t border-slate-100">
-                <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl">
-                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold">
-    <i data-lucide="user" class="w-6 h-6"></i>
-</div>
-                    <div class="sidebar-text">
-                        <p id="user-role" class="text-xs font-black text-slate-900">ADMINISTRATOR</p>
-                        <p class="text-[10px] text-blue-600 font-bold uppercase">Cashier Office</p>
-                    </div>
-                </div>
-            </div>
-        </aside>
-        <!-- MAIN CONTENT -->
-  
-
-            <main class="px-6 pb-6 max-w-8xl w-full mx-auto">
- 
-        <div class="flex-1 flex flex-col min-w-0 overflow-y-auto">
-            <!-- STUDENTS TAB -->
-            <div id="tab-students" class="py-4 space-y-3">
-                <header class="flex justify-between items-end">
-                    <div>
-                        <h1 class="text-2xl font-black text-slate-900">Student Records</h1>
-                        <p id="active-term" class="text-sm text-slate-500 font-medium">Loading...</p>
-                    </div>
-                      <div class="flex gap-2">
-                        <button onclick="toggleModal('modal-semester')" class="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase hover:bg-slate-50 flex items-center gap-2">
-                            <i data-lucide="calendar" class="w-4 h-4"></i> Manage Semester
-                        </button>
-                        <button onclick="toggleModal('modal-add-student')" class="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase hover:bg-blue-600 flex items-center gap-2 shadow-lg shadow-slate-200 transition-all">
-                            <i data-lucide="user-plus" class="w-4 h-4"></i> Add Student
-                        </button>
-                        <button onclick="document.getElementById('excel-upload').click()" class="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-black uppercase hover:bg-green-700 flex items-center gap-2 shadow-lg shadow-green-100 transition-all">
-                            <i data-lucide="file-up" class="w-4 h-4"></i> Import Excel
-                            <input type="file" id="excel-upload" class="hidden" accept=".csv, .xlsx, .xls" onchange="simulateExcelUpload(event)">
-                        </button>
-                    </div>
-                </header>
-                <!-- Search & Filters -->
-                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div class="md:col-span-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Search Student ID</label>
-                        <div class="relative">
-                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-                            <input id="search-id" oninput="filterStudents()" type="text" placeholder="Ex: 2025-0001" class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none transition-all">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Filter Status</label>
-                        <select id="filter-status" onchange="filterStudents()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold">
-                            <option value="All">All Status</option>
-                            <option value="Paid">Paid Only</option>
-                            <option value="Unpaid">Unpaid Only</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Filter College</label>
-                        <select id="filter-college" onchange="filterStudents()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold">
-                            <option value="All">All Colleges</option>
-                            <option value="CED">CED (Education)</option>
-                            <option value="CAS">CAS (Arts & Sci)</option>
-                            <option value="CBA">CBA (Business)</option>
-                            <option value="CEAC">CEAC (Engineering)</option>
-                            <option value="CHS">CHS (Health Sci)</option>
-                        </select>
-                    </div>
-                </div>
-                <!-- Student Table -->
-                <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                    <table class="w-full text-left">
-                        <thead class="bg-slate-50 border-b border-slate-200">
-                            <tr class="text-[10px] text-slate-400 uppercase tracking-widest">
-                                <th class="px-6 py-4">Student ID</th>
-                                <th class="px-6 py-4">Full Name</th>
-                                <th class="px-6 py-4">College</th>
-                                 <th class="px-6 py-4 text-center">Officer</th>
-                                <th class="px-6 py-4">Status</th>
-                                <th class="px-6 py-4 text-center">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="student-table-body" class="divide-y divide-slate-100"></tbody>
-                    </table>
-                </div>
-            </div>
+    <!-- SIDEBAR (Not shown when printing) -->
+    <aside id="sidebar" class="sidebar-expanded bg-white border-r border-slate-200 flex flex-col transition-all duration-300 z-30 sticky top-0 h-screen shrink-0">
+      <div class="p-6 flex items-center justify-between border-b border-slate-100">
+        <div class="flex items-center gap-3 overflow-hidden">
+          <div class="bg-blue-600 p-2 rounded-lg text-white shrink-0"><i data-lucide="receipt" class="w-5 h-5"></i></div>
+          <h2 class="font-black text-slate-900 tracking-tight text-xl">DocuMint</h2>
         </div>
-    </div>
-    <!-- PAYMENT / RECEIPT MODAL -->
-    <!-- PAYMENT / RECEIPT MODAL -->
-<div id="payment-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+        <!-- SIDEBAR TOGGLE -->
+        <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-slate-100 transition">
+          <i id="sidebar-toggle-icon" data-lucide="chevron-left" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scroll">
+        <a href="../dashboard/dashboard.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
+          <i data-lucide="layout-dashboard" class="w-5 h-5 shrink-0"></i>
+          <span class="sidebar-text whitespace-nowrap">Dashboard</span>
+        </a>
+        <a href="student.html" class="flex items-center gap-4 p-3 bg-blue-50 text-blue-600 rounded-xl font-bold transition-all group">
+          <i data-lucide="users" class="w-5 h-5 shrink-0"></i>
+          <span class="sidebar-text whitespace-nowrap">Students & Payments</span>
+        </a>
+        <a href="../add_fees/add_fees.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
+          <i data-lucide="credit-card" class="w-5 h-5 shrink-0"></i>
+          <span class="sidebar-text whitespace-nowrap">Fees Management</span>
+        </a>
+        <a href="../report/report.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
+          <i data-lucide="file-text" class="w-5 h-5 shrink-0"></i>
+          <span class="sidebar-text whitespace-nowrap">Reports</span>
+        </a>
+      </nav>
+
+      <div class="mt-auto p-4 space-y-2">
+        <!-- Settings Button -->
+        <button onclick="window.location.href='settings.html'" class="w-full flex items-center gap-4 p-3 text-blue-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-bold transition-all">
+          <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+          <span class="sidebar-text">Settings</span>
+        </button>
+
+        <!-- Log Out Button -->
+        <button onclick="window.location.href='login.html'" class="w-full flex items-center gap-4 p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl font-bold transition-all">
+          <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
+          <span class="sidebar-text">Log Out</span>
+        </button>
+      </div>
+
+      <div class="p-4 border-t border-slate-100">
+        <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl">
+          <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold">
+            <i data-lucide="user" class="w-6 h-6"></i>
+          </div>
+          <div class="sidebar-text">
+            <p id="user-role" class="text-xs font-black text-slate-900">ADMINISTRATOR</p>
+            <p class="text-[10px] text-blue-600 font-bold uppercase">Cashier Office</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="px-6 pb-6 max-w-8xl w-full mx-auto">
+      <div class="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <!-- STUDENTS TAB -->
+        <div id="tab-students" class="py-4 space-y-3">
+          <header class="flex justify-between items-end">
+            <div>
+              <h1 class="text-2xl font-black text-slate-900">Student Records</h1>
+              <p id="active-term" class="text-sm text-slate-500 font-medium">Loading...</p>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="toggleModal('modal-semester')" class="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase hover:bg-slate-50 flex items-center gap-2">
+                <i data-lucide="calendar" class="w-4 h-4"></i> Manage Semester
+              </button>
+              <button onclick="toggleModal('modal-add-student')" class="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase hover:bg-blue-600 flex items-center gap-2 shadow-lg shadow-slate-200 transition-all">
+                <i data-lucide="user-plus" class="w-4 h-4"></i> Add Student
+              </button>
+              <button onclick="document.getElementById('excel-upload').click()" class="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-black uppercase hover:bg-green-700 flex items-center gap-2 shadow-lg shadow-green-100 transition-all">
+                <i data-lucide="file-up" class="w-4 h-4"></i> Import Excel
+                <input type="file" id="excel-upload" class="hidden" accept=".csv, .xlsx, .xls" onchange="simulateExcelUpload(event)">
+              </button>
+            </div>
+          </header>
+
+          <!-- Search & Filters -->
+          <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div class="md:col-span-2">
+              <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Search Student ID</label>
+              <div class="relative">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                <input id="search-id" oninput="filterStudents()" type="text" placeholder="Ex: 2025-0001" class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none transition-all">
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Filter Status</label>
+              <select id="filter-status" onchange="filterStudents()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+                <option value="All">All Status</option>
+                <option value="Paid">Paid Only</option>
+                <option value="Unpaid">Unpaid Only</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Filter College</label>
+              <select id="filter-college" onchange="filterStudents()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+                <option value="All">All Colleges</option>
+                <option value="CED">CED (Education)</option>
+                <option value="CAS">CAS (Arts & Sci)</option>
+                <option value="CBA">CBA (Business)</option>
+                <option value="CEAC">CEAC (Engineering)</option>
+                <option value="CHS">CHS (Health Sci)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Student Table -->
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <table class="w-full text-left">
+              <thead class="bg-slate-50 border-b border-slate-200">
+                <tr class="text-[10px] text-slate-400 uppercase tracking-widest">
+                  <th class="px-6 py-4">Student ID</th>
+                  <th class="px-6 py-4">Full Name</th>
+                  <th class="px-6 py-4">College</th>
+                  <th class="px-6 py-4 text-center">Officer</th>
+                  <th class="px-6 py-4">Status</th>
+                  <th class="px-6 py-4 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="student-table-body" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- PAYMENT / RECEIPT MODAL -->
+  <div id="payment-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
     <div class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex overflow-hidden max-h-[90vh]">
-        <!-- Fee Selection -->
-        <div class="w-1/2 p-8 border-r border-slate-100 flex flex-col">
-            <div class="flex justify-between items-start mb-2">
-                <h3 class="text-xl font-black text-slate-900">Process Payment</h3>
-                <button onclick="closePayment()" class="p-1 hover:bg-slate-100 rounded-full transition-colors">
-                    <i data-lucide="x" class="w-5 h-5 text-slate-400"></i>
-                </button>
-            </div>
-            <p id="pay-student-name" class="text-blue-600 font-bold mb-6"></p>
 
-            <div class="flex-1 space-y-4 overflow-y-auto pr-2 custom-scroll">
-                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <p class="text-[10px] font-black text-slate-400 uppercase mb-4">Select Fees to include</p>
-
-                    <!-- DYNAMIC FEES CONTAINER -->
-                    <div id="fees-container" class="space-y-3">
-                        <!-- JS will populate fees checkboxes here based on DB and student role -->
-                        <p class="text-slate-400 italic text-xs">Loading fees...</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="pt-6 border-t border-slate-100 mt-6 flex items-center justify-between">
-                <div>
-                    <p class="text-[10px] font-black text-slate-400 uppercase">Total Amount</p>
-                    <p id="total-display" class="text-3xl font-black text-slate-900">₱0.00</p>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="closePayment()" class="px-6 py-3 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">CANCEL</button>
-                    <button onclick="issueAndPrint()" class="px-8 py-3 bg-blue-600 text-white font-black rounded-xl shadow-lg shadow-blue-200 hover:scale-[1.02] transition-all uppercase tracking-tight text-sm">PRINT RECEIPT</button>
-                </div>
-            </div>
+      <!-- Fee Selection -->
+      <div class="w-1/2 p-8 border-r border-slate-100 flex flex-col min-w-0">
+        <div class="flex justify-between items-start mb-2">
+          <h3 class="text-xl font-black text-slate-900">Process Payment</h3>
+          <button onclick="closePayment()" class="p-1 hover:bg-slate-100 rounded-full transition-colors">
+            <i data-lucide="x" class="w-5 h-5 text-slate-400"></i>
+          </button>
         </div>
 
-        <!-- Receipt Preview -->
-        <div class="w-1/2 bg-slate-50 p-8 flex flex-col">
-            <div id="receipt-body-template" class="bg-white p-8 shadow-sm border border-slate-200 rounded-lg flex-1 flex flex-col">
-                <div class="mb-6 text-center">
-                    <div class="flex justify-center items-center gap-4 mb-2">
-                        <img src="/assets/right-logo.jpg" alt="Left Logo" class="h-16 w-16 object-contain">
-                        <img src="/assets/left-logo.png" alt="Right Logo" class="h-16 w-16 object-contain">
-                    </div>
-                    <h4 class="text-lg font-black tracking-tighter text-blue-800">ACKNOWLEDGEMENT RECEIPT</h4>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase">
-                        Notre Dame of Marbel University<br>
-                        Supreme Student Government<br>
-                        City of Koronadal South Cotabato
-                    </p>
-                </div>
+        <p id="pay-student-name" class="text-blue-600 font-bold mb-6"></p>
 
-                <!-- Receipt Data -->
-                <div id="receipt-data-content" class="flex-1 flex flex-col justify-between">
-                    <div class="space-y-3">
-                        <div class="flex justify-between text-[10px] border-b border-slate-100 pb-2">
-                            <span class="font-bold uppercase text-slate-400">Transaction ID</span>
-                            <span id="rec-tid" class="font-mono font-bold">---</span>
-                        </div>
-                        <div class="flex justify-between text-[10px] border-b border-slate-100 pb-2">
-                            <span class="font-bold uppercase text-slate-400">Date Issued</span>
-                            <span id="rec-date" class="font-bold">---</span>
-                        </div>
-                        <div class="flex justify-between text-xs border-b border-slate-100 pb-2 pt-2">
-                            <span class="font-bold uppercase text-slate-400">Paid By (Student)</span>
-                            <span id="rec-student" class="font-black text-slate-900 uppercase">---</span>
-                        </div>
+        <div class="flex-1 space-y-4 overflow-y-auto pr-2 custom-scroll min-w-0">
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <p class="text-[10px] font-black text-slate-400 uppercase mb-4">Select Fees to include</p>
 
-                        <div class="pt-4">
-                            <p class="text-[9px] font-black text-slate-300 uppercase mb-2">Particulars</p>
-                            <div id="rec-fees-list" class="space-y-1 text-xs">
-                                <p class="text-slate-400 italic">No fees selected</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="pt-4 border-t-2 border-dashed border-slate-200">
-                        <div class="flex justify-between items-center mb-10">
-                            <span class="font-black text-slate-900">TOTAL AMOUNT</span>
-                            <span id="rec-total" class="text-xl font-black text-blue-600">₱0.00</span>
-                        </div>
-                        <div class="text-center">
-                            <p id="rec-issuer-name" class="text-[10px] font-black text-slate-900 uppercase">ADMINISTRATOR</p>
-                            <div class="w-48 border-b border-slate-900 mx-auto my-1"></div>
-                            <p class="text-[8px] text-slate-400 font-bold uppercase">Authorized Issuer</p>
-                        </div>
-                    </div>
-                </div>
+            <!-- DYNAMIC FEES CONTAINER -->
+            <div id="fees-container" class="space-y-3">
+              <p class="text-slate-400 italic text-xs">Loading fees...</p>
             </div>
+          </div>
         </div>
-    </div>
-</div>
 
+        <!-- ✅ FIX: Prevent button area from shrinking to 1% width -->
+        <div class="pt-6 border-t border-slate-100 mt-6 flex items-start justify-between gap-4">
+          <!-- Total block can shrink -->
+          <div class="flex-1 min-w-0">
+            <p class="text-[10px] font-black text-slate-400 uppercase">Total Amount</p>
+            <p id="total-display" class="text-3xl font-black text-slate-900 whitespace-nowrap">₱0.00</p>
+          </div>
 
-    <!-- HIDDEN CONTAINER FOR PRINTING TWO COPIES -->
-    <div id="print-container" class="hidden"></div>
-<div id="modal-add-student" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 class="text-xl font-black text-slate-900">Add New Student</h3>
-                <button onclick="toggleModal('modal-add-student')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+          <!-- Buttons block should NOT shrink -->
+          <div class="flex flex-col items-end gap-2 flex-shrink-0 min-w-[220px]">
+            <div class="flex gap-2">
+              <button onclick="closePayment()"
+                class="px-6 py-3 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
+                CANCEL
+              </button>
+
+              <button id="btn-pay-now" type="button"
+                class="px-8 py-3 bg-blue-600 text-white font-black rounded-xl shadow-lg shadow-blue-200 hover:scale-[1.02] transition-all uppercase tracking-tight text-sm">
+                PAY
+              </button>
             </div>
-            <form id="form-add-student" onsubmit="handleManualAdd(event)" class="p-6 space-y-4">
-                <div>
-                    <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Student ID</label>
-                    <input type="text" name="sid" required placeholder="2025-XXXX" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">First Name</label>
-                        <input type="text" name="fname" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Last Name</label>
-                        <input type="text" name="lname" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
-                    </div>
-                </div>
-                <div>
-                    <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">College</label>
-                   <select id="select-department" name="department_id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
-    <option value="1">CED</option>
-    <option value="2">CBA</option>
-    <option value="3">CAS</option>
-    <option value="4">CHS</option>
-    <option value="5">CEAC</option>
-</select>
 
-                </div>
-                <div>
-    <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Course</label>
-    <select id="select-course" name="course_id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
-        <option value="">Select Course</option>
-        <!-- Options populated dynamically based on department -->
+            <button onclick="issueAndPrint()"
+              class="px-8 py-3 bg-blue-600 text-white font-black rounded-xl shadow-lg shadow-blue-200 hover:scale-[1.02] transition-all uppercase tracking-tight text-sm w-full">
+              PRINT RECEIPT
+            </button>
+
+            <!-- REPRINT AREA -->
+            
+
+          </div>
+        </div>
+       <div class="mt-2 p-2 bg-white rounded-xl border border-slate-200 w-full max-w-lg">
+
+  <p class="text-[10px] font-black text-slate-400 uppercase mb-2">
+    Reprint Receipt
+  </p>
+
+  <div class="flex flex-wrap gap-2">
+    <!-- Select -->
+    <select
+      id="reprint-select"
+      class="w-full sm:flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+    >
+      <option value="">No previous receipts</option>
     </select>
-</div>
-                <div>
-                    <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Initial Status</label>
-                   <select name="status_id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
-        <option value="1">Unpaid</option>
-        <option value="2">Paid</option>
-        
-    </select>
-                </div>
-                <button type="submit" class="w-full py-4 bg-blue-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">Save Record</button>
-            </form>
-        </div>
-    </div>
 
-
-    <!-- MODAL: MANAGE SEMESTER -->
-    <div id="modal-semester" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 class="text-xl font-black text-slate-900">Manage Semester</h3>
-                <button onclick="toggleModal('modal-semester')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
-            </div>
-            <div class="p-6 space-y-4">
-    <!-- Academic Year -->
-    <div>
-        <div class="flex items-center justify-between mb-2">
-  <label class="text-[10px] font-black text-slate-400 uppercase block">
-    Academic Year
-  </label>
-
-  <!-- Your button next to the label -->
-  <button
-    type="button"
-    class="px-2 py-1 text-[10px] font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition"
-    onclick="openYearModal()"
-  >
-    Edit
-  </button>
-</div>
-
-        <!-- Dropdown to fetch years from DB -->
-        <select id="select-year" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none mb-2">
-            <!-- Options populated dynamically -->
-        </select>
-        <!-- Manual input fallback -->
-        <input type="text" id="input-ay" placeholder="Or add new year e.g. 2024-2025" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
-    </div>
-
-    <!-- Active Semester -->
-    <div>
-        <div class="flex items-center justify-between mb-2">
-  <label class="text-[10px] font-black text-slate-400 uppercase block">
-    Active Semester
-  </label>
-  <button
-    type="button"
-    class="px-2 py-1 text-[10px] font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition"
-    onclick="openSemesterModal()"
-  >
-    Edit
-  </button>
-</div>
-        <!-- Dropdown to fetch semesters based on selected year -->
-        <select id="select-sem" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none mb-2">
-            <!-- Options populated dynamically -->
-        </select>
-        <!-- Manual input fallback -->
-        <input type="text" id="input-sem-manual" placeholder="Or add new semester e.g. 1st Semester" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
-    </div>
-
-    <button onclick="updateSemester()" class="w-full py-4 bg-slate-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-slate-800 transition-all">
-        Update Term
+    <!-- Button -->
+    <button
+      id="btn-reprint"
+      type="button"
+      class="w-full sm:w-auto px-4 py-3 bg-slate-900 text-white font-black rounded-xl text-xs uppercase whitespace-nowrap"
+      onclick="handleReprintReceipt()"
+    >
+      REPRINT
     </button>
+  </div>
 </div>
 
+      </div>
+
+      <!-- Receipt Preview -->
+      <div class="w-1/2 bg-slate-50 p-8 flex flex-col min-w-0">
+        <div id="receipt-body-template" class="bg-white p-8 shadow-sm border border-slate-200 rounded-lg flex-1 flex flex-col min-w-0">
+          <div class="mb-6 text-center">
+            <div class="flex justify-center items-center gap-4 mb-2">
+              <img src="/assets/right-logo.jpg" alt="Left Logo" class="h-16 w-16 object-contain">
+              <img src="/assets/left-logo.png" alt="Right Logo" class="h-16 w-16 object-contain">
+            </div>
+            <h4 class="text-lg font-black tracking-tighter text-blue-800">ACKNOWLEDGEMENT RECEIPT</h4>
+            <p class="text-[10px] font-bold text-slate-400 uppercase">
+              Notre Dame of Marbel University<br>
+              Supreme Student Government<br>
+              City of Koronadal South Cotabato
+            </p>
+          </div>
+
+          <!-- Receipt Data -->
+          <div id="receipt-data-content" class="flex-1 flex flex-col justify-between min-w-0">
+            <div class="space-y-3">
+              <div class="flex justify-between text-[10px] border-b border-slate-100 pb-2">
+                <span class="font-bold uppercase text-slate-400">Transaction ID</span>
+                <span id="rec-tid" class="font-mono font-bold">---</span>
+              </div>
+              <div class="flex justify-between text-[10px] border-b border-slate-100 pb-2">
+                <span class="font-bold uppercase text-slate-400">Date Issued</span>
+                <span id="rec-date" class="font-bold">---</span>
+              </div>
+              <div class="flex justify-between text-xs border-b border-slate-100 pb-2 pt-2">
+                <span class="font-bold uppercase text-slate-400">Paid By (Student)</span>
+                <span id="rec-student" class="font-black text-slate-900 uppercase">---</span>
+              </div>
+
+              <div class="pt-4">
+                <p class="text-[9px] font-black text-slate-300 uppercase mb-2">Particulars</p>
+                <div id="rec-fees-list" class="space-y-1 text-xs">
+                  <p class="text-slate-400 italic">No fees selected</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-4 border-t-2 border-dashed border-slate-200">
+              <div class="flex justify-between items-center mb-10">
+                <span class="font-black text-slate-900">TOTAL AMOUNT</span>
+                <span id="rec-total" class="text-xl font-black text-blue-600">₱0.00</span>
+              </div>
+              <div class="text-center">
+                <p id="rec-issuer-name" class="text-[10px] font-black text-slate-900 uppercase">ADMINISTRATOR</p>
+                <div class="w-48 border-b border-slate-900 mx-auto my-1"></div>
+                <p class="text-[8px] text-slate-400 font-bold uppercase">Authorized Issuer</p>
+              </div>
+              
+            </div>
+            
+          </div>
+          
         </div>
-    </div>
+        
+      </div>
 
-    <!-- Year Modal -->
-<div id="modal-year-edit" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50">
-  <div class="bg-white p-6 rounded-lg w-[300px]">
-    <h3 class="font-bold text-sm mb-2">Edit Academic Year</h3>
-    <select id="year-select-edit" class="w-full mb-2 border p-2 rounded"></select>
-    <input type="text" id="year-name-edit" placeholder="New Year Name" class="w-full mb-4 border p-2 rounded" />
-    <div class="flex justify-end gap-2">
-      <button class="px-3 py-1 bg-gray-300 rounded" onclick="closeYearModal()">Cancel</button>
-      <button class="px-3 py-1 bg-blue-600 text-white rounded" onclick="updateYear()">Save</button>
+    </div>
+    
+  </div>
+
+  <!-- HIDDEN CONTAINER FOR PRINTING TWO COPIES -->
+  <div id="print-container" class="hidden"></div>
+
+  <div id="modal-add-student" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+        <h3 class="text-xl font-black text-slate-900">Add New Student</h3>
+        <button onclick="toggleModal('modal-add-student')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+      </div>
+      <form id="form-add-student" onsubmit="handleManualAdd(event)" class="p-6 space-y-4">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Student ID</label>
+          <input type="text" name="sid" required placeholder="2025-XXXX" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">First Name</label>
+            <input type="text" name="fname" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Last Name</label>
+            <input type="text" name="lname" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
+          </div>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">College</label>
+          <select id="select-department" name="department_id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
+            <option value="1">CED</option>
+            <option value="2">CBA</option>
+            <option value="3">CAS</option>
+            <option value="4">CHS</option>
+            <option value="5">CEAC</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Course</label>
+          <select id="select-course" name="course_id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
+            <option value="">Select Course</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Initial Status</label>
+          <select name="status_id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
+            <option value="1">Unpaid</option>
+            <option value="2">Paid</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full py-4 bg-blue-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">Save Record</button>
+      </form>
     </div>
   </div>
-</div>
 
-<!-- Semester Modal -->
-<div id="modal-semester-edit" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50">
-  <div class="bg-white p-6 rounded-lg w-[300px]">
-    <h3 class="font-bold text-sm mb-2">Edit Semester</h3>
-    <select id="semester-select-edit" class="w-full mb-2 border p-2 rounded"></select>
-    <input type="text" id="semester-name-edit" placeholder="New Semester Name" class="w-full mb-4 border p-2 rounded" />
-    <div class="flex justify-end gap-2">
-      <button class="px-3 py-1 bg-gray-300 rounded" onclick="closeSemesterModal()">Cancel</button>
-      <button class="px-3 py-1 bg-green-600 text-white rounded" onclick="updateSemesterName()">Save</button>
+  <!-- MODAL: MANAGE SEMESTER -->
+  <div id="modal-semester" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+        <h3 class="text-xl font-black text-slate-900">Manage Semester</h3>
+        <button onclick="toggleModal('modal-semester')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+      </div>
+      <div class="p-6 space-y-4">
+        <!-- Academic Year -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-[10px] font-black text-slate-400 uppercase block">
+              Academic Year
+            </label>
+
+            <button
+              type="button"
+              class="px-2 py-1 text-[10px] font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition"
+              onclick="openYearModal()"
+            >
+              Edit
+            </button>
+          </div>
+
+          <select id="select-year" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none mb-2"></select>
+          <input type="text" id="input-ay" placeholder="Or add new year e.g. 2024-2025" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
+        </div>
+
+        <!-- Active Semester -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-[10px] font-black text-slate-400 uppercase block">
+              Active Semester
+            </label>
+            <button
+              type="button"
+              class="px-2 py-1 text-[10px] font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition"
+              onclick="openSemesterModal()"
+            >
+              Edit
+            </button>
+          </div>
+
+          <select id="select-sem" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none mb-2"></select>
+          <input type="text" id="input-sem-manual" placeholder="Or add new semester e.g. 1st Semester" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
+        </div>
+
+        <button onclick="updateSemester()" class="w-full py-4 bg-slate-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-slate-800 transition-all">
+          Update Term
+        </button>
+      </div>
     </div>
   </div>
-</div>
- <script type="module" src="student.js"></script>
-<script src="../log_user.js"></script>
-<script src="../student_modal.js"></script>
 
-   
+  <!-- Year Modal -->
+  <div id="modal-year-edit" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50">
+    <div class="bg-white p-6 rounded-lg w-[300px]">
+      <h3 class="font-bold text-sm mb-2">Edit Academic Year</h3>
+      <select id="year-select-edit" class="w-full mb-2 border p-2 rounded"></select>
+      <input type="text" id="year-name-edit" placeholder="New Year Name" class="w-full mb-4 border p-2 rounded" />
+      <div class="flex justify-end gap-2">
+        <button class="px-3 py-1 bg-gray-300 rounded" onclick="closeYearModal()">Cancel</button>
+        <button class="px-3 py-1 bg-blue-600 text-white rounded" onclick="updateYear()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Semester Modal -->
+  <div id="modal-semester-edit" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50">
+    <div class="bg-white p-6 rounded-lg w-[300px]">
+      <h3 class="font-bold text-sm mb-2">Edit Semester</h3>
+      <select id="semester-select-edit" class="w-full mb-2 border p-2 rounded"></select>
+      <input type="text" id="semester-name-edit" placeholder="New Semester Name" class="w-full mb-4 border p-2 rounded" />
+      <div class="flex justify-end gap-2">
+        <button class="px-3 py-1 bg-gray-300 rounded" onclick="closeSemesterModal()">Cancel</button>
+        <button class="px-3 py-1 bg-green-600 text-white rounded" onclick="updateSemesterName()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTIONAL: Selected fees preview (NOT the receipt) -->
+  <div class="mt-4 p-4 bg-white rounded-xl border border-slate-200">
+    <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Selected Fees (Preview)</p>
+    <div id="selected-fees-preview" class="space-y-1 text-xs">
+      <p class="text-slate-400 italic">No fees selected</p>
+    </div>
+  </div>
+
+  <script type="module" src="student.js"></script>
+  <script src="../log_user.js"></script>
+  <script src="../student_modal.js"></script>
 </body>
 </html>

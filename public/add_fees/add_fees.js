@@ -1,6 +1,42 @@
 let feesDb = []; // will always be an array
 
 // -----------------------------
+// HELPERS: ACTIVE SEMESTER
+// -----------------------------
+let activeSemesterId = null;
+
+// Load the currently active semester from backend
+// Expected response example:
+// { success: true, semester_id: 3, semester: "1st Sem", year_id: 2, year: "2025-2026" }
+async function loadActiveSemester() {
+    try {
+        // ✅ FIXED: your server mounts this router at /api/term
+        const res = await fetch("http://localhost:3000/api/term/active");
+
+        // If backend returns HTML error page, avoid JSON crash
+        if (!res.ok) {
+            const text = await res.text();
+            console.error("Active semester request failed:", res.status, text);
+            activeSemesterId = null;
+            return;
+        }
+
+        const data = await res.json();
+
+        if (!data || !data.success || !data.semester_id) {
+            activeSemesterId = null;
+            console.warn("No active semester returned from server:", data);
+            return;
+        }
+
+        activeSemesterId = Number(data.semester_id);
+    } catch (err) {
+        console.error("Load active semester error:", err);
+        activeSemesterId = null;
+    }
+}
+
+// -----------------------------
 // RENDER FEES TABLE
 // -----------------------------
 function renderFees() {
@@ -33,9 +69,7 @@ function renderFees() {
                     <button onclick="openFeeEditor(${index})" class="p-2 text-slate-400 hover:text-blue-600 transition-colors">
                         <i data-lucide="edit-3" class="w-4 h-4"></i>
                     </button>
-                    <button onclick="deleteFee(${fee.fee_id})" class="p-2 text-slate-400 hover:text-red-500 transition-colors">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                    </button>
+                    
                 </td>
             </tr>
         `;
@@ -44,26 +78,26 @@ function renderFees() {
     lucide.createIcons();
 }
 
-
 // -----------------------------
 // OPEN MODAL FOR ADD/EDIT
 // -----------------------------
 function openFeeEditor(index = -1) {
     const modal = document.getElementById('fee-editor-modal');
     const title = document.getElementById('fee-modal-title');
+    const roleSelect = document.getElementById('fee-role-select');
 
     if (index > -1) {
         title.innerText = "Edit Institutional Fee";
         document.getElementById('edit-fee-index').value = index;
         document.getElementById('fee-name-input').value = feesDb[index].fee_name;
         document.getElementById('fee-amount-input').value = feesDb[index].fee_amount;
-        document.getElementById('fee-role-select').value = feesDb[index].role || "Officer";
+        roleSelect.value = String(feesDb[index].role); // always "0" or "1"
     } else {
         title.innerText = "Add New Fee";
         document.getElementById('edit-fee-index').value = -1;
         document.getElementById('fee-name-input').value = "";
         document.getElementById('fee-amount-input').value = "";
-        document.getElementById('fee-role-select').value = "Officer";
+        roleSelect.value = "1"; // default "Officer"
     }
 
     modal.classList.remove('hidden');
@@ -82,45 +116,71 @@ function closeFeeEditor() {
 async function saveFee() {
     const name = document.getElementById('fee-name-input').value.trim();
     const amount = parseFloat(document.getElementById('fee-amount-input').value);
-    const role = document.getElementById('fee-role-select').value; // "1" or "0" stored in DB
+    const role = document.getElementById('fee-role-select').value; // "1" or "0"
     const index = parseInt(document.getElementById('edit-fee-index').value);
 
     if (!name || isNaN(amount)) {
         return alert("Please enter valid fee name and amount");
     }
 
+    // Ensure we have active semester before adding
+    if (activeSemesterId === null) {
+        await loadActiveSemester();
+    }
+
     try {
         let res, data;
 
         if (index === -1) {
-            // ADD
+            // ADD (attach semester_id automatically)
+            if (activeSemesterId === null) {
+                return alert("No active semester set. Please set an active semester first.");
+            }
+
             res = await fetch("http://localhost:3000/api/fees", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fee_name: name, fee_amount: amount, role })
+                body: JSON.stringify({
+                    fee_name: name,
+                    fee_amount: amount,
+                    role,
+                    semester_id: activeSemesterId
+                })
             });
-            data = await res.json();
         } else {
-            // UPDATE
+            // UPDATE (no history; semester_id unchanged)
             const fee_id = feesDb[index].fee_id;
+
             res = await fetch("http://localhost:3000/api/fees", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fee_id, fee_name: name, fee_amount: amount, role })
+                body: JSON.stringify({
+                    fee_id,
+                    fee_name: name,
+                    fee_amount: amount,
+                    role
+                })
             });
-            data = await res.json();
         }
+
+        // guard against HTML error pages
+        if (!res.ok) {
+            const text = await res.text();
+            console.error("Save fee request failed:", res.status, text);
+            return alert("Could not save fee. Backend returned an error.");
+        }
+
+        data = await res.json();
 
         if (!data.success) throw new Error(data.message || "Failed to save fee");
 
         closeFeeEditor();
-        await loadFees(); // reload table
+        await loadFees();
     } catch (err) {
         console.error("Save fee error:", err);
         alert("Could not save fee. Check console for details.");
     }
 }
-
 
 // -----------------------------
 // DELETE FEE
@@ -129,7 +189,13 @@ function deleteFee(fee_id) {
     if (!confirm("Are you sure you want to delete this fee?")) return;
 
     fetch(`http://localhost:3000/api/fees/${fee_id}`, { method: "DELETE" })
-        .then(res => res.json())
+        .then(async (res) => {
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Delete failed (${res.status}): ${text}`);
+            }
+            return res.json();
+        })
         .then(data => {
             if (!data || !data.success) throw new Error(data.message || "Failed to delete fee");
             loadFees();
@@ -141,28 +207,48 @@ function deleteFee(fee_id) {
 }
 
 // -----------------------------
-// LOAD FEES FROM DATABASE
+// LOAD FEES FROM DATABASE (FILTERED BY ACTIVE SEMESTER)
 // -----------------------------
-function loadFees() {
-    fetch("http://localhost:3000/api/fees")
-        .then(res => res.json())
-        .then(data => {
-            if (data.success && Array.isArray(data.fees)) {
-                feesDb = data.fees;
-            } else {
-                feesDb = [];
-                console.warn("No fees returned from server");
-            }
-            renderFees();
-        })
-        .catch(err => {
-            console.error("Load fees error:", err);
+async function loadFees() {
+    try {
+        // Always refresh active semester first
+        await loadActiveSemester();
+
+        // If there's no active semester, show empty state
+        if (activeSemesterId === null) {
             feesDb = [];
             renderFees();
-            alert("Cannot load fees from database. Check backend.");
-        });
-}
+            return;
+        }
 
+        // Backend should filter by query param semester_id
+        const res = await fetch(`http://localhost:3000/api/fees?semester_id=${activeSemesterId}`);
+
+        if (!res.ok) {
+            const text = await res.text();
+            console.error("Load fees request failed:", res.status, text);
+            feesDb = [];
+            renderFees();
+            return alert("Cannot load fees from database. Check backend.");
+        }
+
+        const data = await res.json();
+
+        if (data.success && Array.isArray(data.fees)) {
+            feesDb = data.fees;
+        } else {
+            feesDb = [];
+            console.warn("No fees returned from server:", data);
+        }
+
+        renderFees();
+    } catch (err) {
+        console.error("Load fees error:", err);
+        feesDb = [];
+        renderFees();
+        alert("Cannot load fees from database. Check backend.");
+    }
+}
 
 // -----------------------------
 // SIDEBAR TOGGLE
