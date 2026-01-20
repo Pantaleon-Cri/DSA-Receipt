@@ -19,12 +19,10 @@
         .sidebar-collapsed { width: 80px; }
 
 
-        .college-card.active {
-            border-color: #2563eb;
-            background-color: #eff6ff;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        }
-
+       .college-card.active{
+  border-color: rgb(37 99 235); /* blue-600 */
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
 
         /* Year Selector Styles */
         .year-dropdown {

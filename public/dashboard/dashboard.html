@@ -9,30 +9,24 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-
     <!-- Google Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
-
     <style>
-      
+        /* kept empty on purpose (your dashboard.css can handle styling) */
     </style>
 </head>
 
-
 <body class="text-slate-800">
 
-
     <div id="dashboard-view" class="min-h-screen flex">
-       
+
         <!-- SIDEBAR -->
         <aside id="sidebar" class="sidebar-expanded bg-white border-r border-slate-200 flex flex-col transition-all duration-300 z-30 sticky top-0 h-screen shrink-0">
             <div class="p-6 flex items-center justify-between border-b border-slate-100">
@@ -47,192 +41,164 @@
                 </button>
             </div>
 
-
             <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scroll">
-    <a href="dashboard.html" class="flex items-center gap-4 p-3 bg-blue-50 text-blue-600 rounded-xl font-bold transition-all group">
-        <i data-lucide="layout-dashboard" class="w-5 h-5 shrink-0"></i>
-        <span class="sidebar-text whitespace-nowrap">Dashboard</span>
-    </a>
+                <a href="dashboard.html" class="flex items-center gap-4 p-3 bg-blue-50 text-blue-600 rounded-xl font-bold transition-all group">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-text whitespace-nowrap">Dashboard</span>
+                </a>
 
-    <a href="../student/student.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
-        <i data-lucide="users" class="w-5 h-5 shrink-0"></i>
-        <span class="sidebar-text whitespace-nowrap">Students & Payments</span>
-    </a>
+                <a href="../student/student.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
+                    <i data-lucide="users" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-text whitespace-nowrap">Students & Payments</span>
+                </a>
 
-    <a href="../add_fees/add_fees.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
-        <i data-lucide="credit-card" class="w-5 h-5 shrink-0"></i>
-        <span class="sidebar-text whitespace-nowrap">Fees Management</span>
-    </a>
+                <a href="../add_fees/add_fees.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
+                    <i data-lucide="credit-card" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-text whitespace-nowrap">Fees Management</span>
+                </a>
 
-    <a href="../report/report.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
-        <i data-lucide="file-text" class="w-5 h-5 shrink-0"></i>
-        <span class="sidebar-text whitespace-nowrap">Reports</span>
-    </a>
+                <a href="../report/report.html" class="flex items-center gap-4 p-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold transition-all group">
+                    <i data-lucide="file-text" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-text whitespace-nowrap">Reports</span>
+                </a>
+            </nav>
 
+            <div class="mt-auto p-4 space-y-2">
+                <!-- Settings Button -->
+                <button onclick="window.location.href='settings.html'" class="w-full flex items-center gap-4 p-3 text-blue-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-bold transition-all">
+                    <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-text">Settings</span>
+                </button>
 
+                <!-- Log Out Button -->
+                <button onclick="window.location.href='login.html'" class="w-full flex items-center gap-4 p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl font-bold transition-all">
+                    <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
+                    <span class="sidebar-text">Log Out</span>
+                </button>
+            </div>
 
-</nav>
-
-<div class="mt-auto p-4 space-y-2">
-    <!-- Settings Button -->
-    <button onclick="window.location.href='settings.html'" class="w-full flex items-center gap-4 p-3 text-blue-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-bold transition-all">
-        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
-        <span class="sidebar-text">Settings</span>
-    </button>
-
-    <!-- Log Out Button -->
-    <button onclick="window.location.href='login.html'" class="w-full flex items-center gap-4 p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl font-bold transition-all">
-        <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
-        <span class="sidebar-text">Log Out</span>
-    </button>
-</div>
- 
             <div class="p-4 border-t border-slate-100">
-    <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl overflow-hidden">
-<div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
-    <i data-lucide="user" class="w-6 h-6"></i>
-</div>
+                <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl overflow-hidden">
+                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                        <i data-lucide="user" class="w-6 h-6"></i>
+                    </div>
 
-        <div class="sidebar-text overflow-hidden">
-            <p id="user-role" class="text-xs font-black text-slate-900 truncate">ADMINISTRATOR</p>
-
-            <p class="text-[10px] text-blue-600 font-bold uppercase truncate">Administrator</p>
-        </div>
-    </div>
-</div>     
+                    <div class="sidebar-text overflow-hidden">
+                        <p id="user-role" class="text-xs font-black text-slate-900 truncate">ADMINISTRATOR</p>
+                        <p class="text-[10px] text-blue-600 font-bold uppercase truncate">Administrator</p>
+                    </div>
+                </div>
+            </div>
         </aside>
 
-
         <!-- Main Content -->
-         
-
         <div class="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scroll">
-
-
-
             <main class="p-8 max-w-7xl w-full mx-auto space-y-8">
-               
+
                 <!-- Filters Section -->
                 <section class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-6 items-end">
+
                     <!-- Academic Year Calendar Selector -->
                     <div class="flex-1 min-w-[300px] relative">
                         <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Select Academic Year</label>
+
                         <button onclick="toggleYearDropdown()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 flex items-center justify-between group transition-all">
                             <div class="flex items-center gap-3">
                                 <i data-lucide="calendar" class="w-5 h-5 text-blue-600"></i>
-                                <span id="current-ay-display" class="font-bold text-slate-700">A.Y. 2025 - 2026</span>
+                                <!-- Dynamic -->
+                                <span id="current-ay-display" class="font-bold text-slate-700">Loading...</span>
                             </div>
                             <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors"></i>
                         </button>
-                       
+
                         <div id="year-dropdown" class="year-dropdown">
                             <div class="p-2 border-b border-slate-100 mb-2 flex items-center justify-between">
                                 <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Choose Start Year</span>
                             </div>
-                            <div class="grid grid-cols-3 gap-1" id="year-grid">
-                                <!-- Years generated by JS -->
-                            </div>
+                            <!-- Years generated dynamically by JS from year table -->
+                            <div class="grid grid-cols-3 gap-1" id="year-grid"></div>
                         </div>
                     </div>
 
-
+                    <!-- Semester Selector (Dynamic from semester table) -->
                     <div class="flex-1 min-w-[240px]">
                         <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Semester</label>
-                        <select id="semester-select" onchange="updateDashboard()" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-bold text-slate-700">
-                            <option>1st Semester</option>
-                            <option>2nd Semester</option>
-                            <option>Summer</option>
+                        <select id="semester-select" onchange="updateDashboard()"
+                            class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-bold text-slate-700">
+                            <!-- options generated by JS -->
                         </select>
                     </div>
                 </section>
 
+                <!-- Department / College Unit Navigation (Dynamic from department table) -->
+                <section class="overflow-hidden">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">
+                        College Unit View
+                    </label>
 
-                <!-- College Unit Navigation -->
-                <section>
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">College Unit View</label>
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        <button onclick="selectCollege('ALL')" id="college-ALL" class="college-card active bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
-                            <p class="text-xs font-black text-slate-900">ALL</p>
-                            
-                        </button>
-                        <button onclick="selectCollege('CED')" id="college-CED" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
-                            <p class="text-xs font-black text-slate-900">CED</p>
-                            
-                        </button>
-                        <button onclick="selectCollege('CAS')" id="college-CAS" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
-                            <p class="text-xs font-black text-slate-900">CAS</p>
-                            
-                        </button>
-                        <button onclick="selectCollege('CBA')" id="college-CBA" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
-                            <p class="text-xs font-black text-slate-900">CBA</p>
-                            
-                        </button>
-                        <button onclick="selectCollege('CEAC')" id="college-CEAC" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
-                            <p class="text-xs font-black text-slate-900">CEAC</p>
-                            
-                        </button>
-                        <button onclick="selectCollege('CHS')" id="college-CHS" class="college-card bg-white border border-slate-200 p-4 rounded-xl transition-all text-center">
-                            <p class="text-xs font-black text-slate-900">CHS</p>
-                           
-                        </button>
+                    <div id="college-unit-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 min-w-0">
+                        <!-- department buttons generated by JS -->
                     </div>
                 </section>
 
-
                 <!-- Stats and Table -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <!-- Chart Section -->
+
+                    <!-- Chart Section (NO SHOW ALL HERE) -->
                     <div class="lg:col-span-5 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
                         <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-8 self-start flex items-center gap-2">
                             <i data-lucide="pie-chart" class="w-4 h-4"></i> Payment Percentage
                         </h3>
+
                         <div class="relative w-full max-w-[280px]">
                             <canvas id="paymentChart"></canvas>
                         </div>
-                        <div class="mt-10 grid grid-cols-2 gap-4 w-full">
-                            <div class="p-5 bg-blue-50 rounded-2xl border border-blue-100 cursor-pointer hover:bg-blue-100 transition-all text-center" onclick="filterListByStatus('Paid')">
-                                <p class="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Paid Students</p>
-                                <p id="stat-paid" class="text-3xl font-black text-blue-700">0</p>
-                            </div>
-                            <div class="p-5 bg-slate-50 rounded-2xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all text-center" onclick="filterListByStatus('Unpaid')">
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Unpaid Students</p>
-                                <p id="stat-unpaid" class="text-3xl font-black text-slate-700">0</p>
-                            </div>
+
+                        <div id="status-stat-grid" class="mt-10 grid grid-cols-2 gap-4 w-full">
+                            <!-- JS will insert status cards here -->
                         </div>
                     </div>
 
-
                     <!-- Student Preview Table -->
-                    <div class="lg:col-span-7 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+                    <div class="lg:col-span-7 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col min-w-0">
                         <div class="flex justify-between items-center mb-8">
-                            <div>
+                            <div class="min-w-0">
                                 <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">
                                     Preview
                                 </h3>
-                                <p class="text-[10px] text-blue-600 font-bold mt-1 uppercase">Selection: <span id="preview-college-label">ALL</span> / <span id="preview-status-label">All Statuses</span></p>
+                                <p class="text-[10px] text-blue-600 font-bold mt-1 uppercase tracking-widest break-words">
+                                    Selection:
+                                    <span id="preview-college-label">ALL</span> /
+                                    <span id="preview-status-label">All Statuses</span>
+                                </p>
                             </div>
-                            <button id="show-all-btn" onclick="openFullListModal()" class="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg hover:bg-slate-800 transition-all shadow-sm">Show All</button>
+
+                            <button id="show-all-btn" onclick="openFullListModal()"
+                                class="shrink-0 px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg hover:bg-slate-800 transition-all shadow-sm">
+                                Show All
+                            </button>
                         </div>
-                       
-                        <div class="flex-1">
+
+                        <div class="flex-1 min-w-0 overflow-x-auto">
                             <table class="w-full text-left">
                                 <thead>
                                     <tr class="text-[10px] text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                                        <th class="pb-4 font-black">Full Name</th>
-                                        <th class="pb-4 font-black">College</th>
-                                        <th class="pb-4 font-black text-right">Status</th>
+                                        <th class="pb-4 font-black whitespace-nowrap">Full Name</th>
+                                        <th class="pb-4 font-black whitespace-nowrap">College</th>
+                                        <th class="pb-4 font-black text-right whitespace-nowrap">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="student-preview-body" class="text-sm">
+                                    <!-- JS renders preview rows -->
                                 </tbody>
                             </table>
                         </div>
                     </div>
+
                 </div>
             </main>
         </div>
     </div>
-
 
     <!-- MODAL -->
     <div id="full-list-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop">
@@ -240,33 +206,48 @@
             <div class="p-8 border-b border-slate-100 flex justify-between items-center">
                 <div>
                     <h2 class="text-2xl font-black text-slate-900 tracking-tight">Student Records</h2>
-                    <p class="text-xs text-blue-600 font-bold uppercase tracking-widest mt-1" id="modal-subtitle"></p>
+                    <p class="text-xs text-blue-600 font-bold uppercase tracking-widest mt-1 break-words" id="modal-subtitle"></p>
                 </div>
                 <button onclick="closeFullListModal()" class="p-2 hover:bg-slate-100 rounded-full transition-colors">
                     <i data-lucide="x" class="w-6 h-6 text-slate-400"></i>
                 </button>
             </div>
-            <div class="flex-1 overflow-y-auto p-8 custom-scroll">
-                <table class="w-full text-left border-separate border-spacing-y-2">
-                    <thead class="sticky top-0 bg-white z-10">
-                        <tr class="text-[10px] text-slate-400 uppercase tracking-widest">
-                            <th class="px-4 pb-4">ID</th>
-                            <th class="px-4 pb-4">Name</th>
-                            <th class="px-4 pb-4">College</th>
-                            <th class="px-4 pb-4 text-right">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="modal-table-body" class="text-sm"></tbody>
-                </table>
+
+            <!-- IMPORTANT FIXES:
+                 - remove padding from scroll container (padding causes a "gap" under sticky header)
+                 - put padding INSIDE the table wrapper instead
+                 - make thead sticky with solid bg and higher z-index
+            -->
+            <div class="flex-1 overflow-y-auto custom-scroll relative">
+                <div class="p-8 pt-0">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 z-30 bg-white">
+                            <tr class="text-[10px] text-slate-400 uppercase tracking-widest bg-white border-b border-slate-200 shadow-sm">
+                                <th class="px-4 py-4 bg-white whitespace-nowrap">ID</th>
+                                <th class="px-4 py-4 bg-white whitespace-nowrap">Name</th>
+                                <th class="px-4 py-4 bg-white whitespace-nowrap">College</th>
+                                <th class="px-4 py-4 bg-white text-right whitespace-nowrap">Status</th>
+                            </tr>
+                        </thead>
+
+                        <!-- Rows are normal table rows (NOT card rows) so they can't scroll "through" header -->
+                        <tbody id="modal-table-body" class="text-sm divide-y divide-slate-100 bg-white">
+                            <!-- JS renders modal rows -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
         </div>
     </div>
 
-
+    <!-- Your JS -->
     <script src="dashboard.js"></script>
-     <script src="../log_user.js"></script>
+    <script src="../log_user.js"></script>
+
+    <script>
+        lucide.createIcons();
+    </script>
+
 </body>
 </html>
-
-
-

@@ -665,7 +665,7 @@ async function openPayment(studentId) {
   if (!Array.isArray(feesDb) || feesDb.length === 0) return alert('No fees available.');
 
   // ✅ FILTER FEES BY ACTIVE SEMESTER + ROLE
-  const studentRole = activeStudent.is_officer ? '0' : '1';
+  const studentRole = activeStudent.is_officer ? '1' : '0';
   const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
 
   const availableFees = (feesDb || [])

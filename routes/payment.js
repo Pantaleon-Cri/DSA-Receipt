@@ -432,4 +432,132 @@ router.post('/payments', async (req, res) => {
   }
 });
 
+
+// -----------------------------------------------------------------------------
+// GET /api/payments/reports/transactions?interval=day|week|month&target=...
+// Report is based on payment_date only (NOT semester bound)
+// Groups rows by (control_number + student_id) to merge multiple fee_id rows.
+// Also resolves Student Name from student_firstname + student_lastname.
+// IMPORTANT: student table has composite key (student_id, year_semester_id),
+// so we pick the latest year_semester_id per student to avoid duplicates.
+// -----------------------------------------------------------------------------
+router.get('/payments/reports/transactions', async (req, res) => {
+  const interval = String(req.query.interval || 'day');
+  const target = String(req.query.target || '');
+
+  if (!target) {
+    return res.status(400).json({ success: false, message: 'target is required' });
+  }
+
+  // ---- Build [start, end) range from target ----
+  function getRange(interval, target) {
+    if (interval === 'day') {
+      const start = new Date(`${target}T00:00:00`);
+      if (Number.isNaN(start.getTime())) throw new Error('Invalid day target');
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      return { start, end };
+    }
+
+    if (interval === 'month') {
+      const [y, m] = target.split('-').map(Number);
+      if (!y || !m) throw new Error('Invalid month target');
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 1);
+      return { start, end };
+    }
+
+    if (interval === 'week') {
+      const [yStr, wStr] = target.split('-W');
+      const y = Number(yStr);
+      const w = Number(wStr);
+      if (!y || !w) throw new Error('Invalid week target');
+
+      // ISO week Monday start (UTC)
+      const simple = new Date(Date.UTC(y, 0, 1 + (w - 1) * 7));
+      const dow = simple.getUTCDay();
+      const start = new Date(simple);
+      start.setUTCDate(simple.getUTCDate() - ((dow + 6) % 7));
+      start.setUTCHours(0, 0, 0, 0);
+
+      const end = new Date(start);
+      end.setUTCDate(start.getUTCDate() + 7);
+      return { start, end };
+    }
+
+    throw new Error('Invalid interval');
+  }
+
+  const pad2 = n => String(n).padStart(2, '0');
+  const toMysql = d =>
+    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+
+  let conn;
+  try {
+    const { start, end } = getRange(interval, target);
+    const startStr = toMysql(start);
+    const endStr = toMysql(end);
+
+    conn = await getConnection();
+    await connQuery(conn, 'SET SESSION group_concat_max_len = 8192');
+
+    const rows = await connQuery(
+      conn,
+      `
+      SELECT
+        p.control_number AS id,
+        p.student_id     AS studentId,
+
+        -- Build student full name (fallback to ID-xxxx)
+        COALESCE(
+          CONCAT_WS(' ', s.student_firstname, s.student_lastname),
+          CONCAT('ID-', p.student_id)
+        ) AS student,
+
+        -- Comma-separated allocated fees for the receipt
+        GROUP_CONCAT(DISTINCT f.fee_name ORDER BY f.fee_name SEPARATOR ', ') AS fee,
+
+        -- Total amount for the receipt
+        SUM(p.amount_paid) AS amount,
+
+        'Paid' AS status,
+        MAX(p.payment_date) AS payment_date
+
+      FROM payment p
+      LEFT JOIN fees f ON f.fee_id = p.fee_id
+
+      -- Student table has multiple rows per student_id across terms.
+      -- Pick ONE row per student_id (latest year_semester_id) to avoid duplicates.
+      LEFT JOIN (
+        SELECT s1.*
+        FROM student s1
+        JOIN (
+          SELECT student_id, MAX(year_semester_id) AS max_term
+          FROM student
+          GROUP BY student_id
+        ) latest
+          ON latest.student_id = s1.student_id
+         AND latest.max_term = s1.year_semester_id
+      ) s ON s.student_id = p.student_id
+
+      WHERE p.payment_date >= ? AND p.payment_date < ?
+        AND p.control_number IS NOT NULL AND p.control_number <> ''
+
+      GROUP BY p.control_number, p.student_id
+      ORDER BY MAX(p.payment_date) DESC
+      `,
+      [startStr, endStr]
+    );
+
+    return res.json({ success: true, transactions: rows });
+  } catch (err) {
+    console.error('GET /api/payments/reports/transactions error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Server error' });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+
+
 module.exports = router;

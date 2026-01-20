@@ -58,30 +58,51 @@ router.get('/semesters', (req, res) => {
 // -------------------------
 router.get('/active', (req, res) => {
     const sql = `
-        SELECT s.semester_id, s.semester_name, y.year_id, y.year_name
+        SELECT 
+            s.semester_id,
+            s.semester_name,
+            y.year_id,
+            y.year_name,
+            (
+                SELECT COUNT(*)
+                FROM student st
+                WHERE st.year_semester_id = s.semester_id
+            ) AS student_population
         FROM semester s
         JOIN year y ON s.year_id = y.year_id
-        WHERE s.is_active = 1 AND y.is_active = 1
+        WHERE s.is_active = 1
+          AND y.is_active = 1
         LIMIT 1
     `;
 
     db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ success: false, message: err.message });
+        if (err) {
+            return res.status(500).json({
+                success: false,
+                message: err.message
+            });
+        }
 
-        if (results.length === 0) {
-            return res.json({ success: false, message: 'No active term found' });
+        if (!results || results.length === 0) {
+            return res.json({
+                success: false,
+                message: 'No active term found'
+            });
         }
 
         const active = results[0];
+
         res.json({
             success: true,
             semester_id: active.semester_id,
             semester: active.semester_name,
-            year_id: active.year_id,       // <-- added year_id
-            year: active.year_name
+            year_id: active.year_id,
+            year: active.year_name,
+            student_population: Number(active.student_population || 0)
         });
     });
 });
+
 
 
 // -------------------------
