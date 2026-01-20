@@ -16,6 +16,7 @@ const termRouter = require('./routes/term');
 const feesRouter = require('./routes/fees');
 const paymentRouter = require('./routes/payment');
 const dashboardRouter = require('./routes/dashboard');
+const rolesRouter = require('./routes/roles');
 const app = express();
 
 // --- Middleware ---
@@ -35,6 +36,7 @@ app.use('/api/fees', feesRouter);
 app.use('/api', paymentRouter);
 app.use('/api/dashboard', dashboardRouter);
 
+app.use('/api/roles', rolesRouter);
 // server.js (or your route handler)
 app.post('/api/students/import', async (req, res) => {
     try {
