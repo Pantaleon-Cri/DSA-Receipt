@@ -49,7 +49,7 @@
 
       <div class="mt-auto p-4 space-y-2">
         <!-- Settings Button -->
-        <button onclick="window.location.href='settings.html'" class="w-full flex items-center gap-4 p-3 text-blue-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-bold transition-all">
+        <button onclick="window.location.href='../settings/settings.html'" class="w-full flex items-center gap-4 p-3 text-blue-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-bold transition-all">
           <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
           <span class="sidebar-text">Settings</span>
         </button>
@@ -203,38 +203,34 @@
               class="px-8 py-3 bg-blue-600 text-white font-black rounded-xl shadow-lg shadow-blue-200 hover:scale-[1.02] transition-all uppercase tracking-tight text-sm w-full">
               PRINT RECEIPT
             </button>
-
-            <!-- REPRINT AREA -->
-            
-
           </div>
         </div>
-       <div class="mt-2 p-2 bg-white rounded-xl border border-slate-200 w-full max-w-lg">
 
-  <p class="text-[10px] font-black text-slate-400 uppercase mb-2">
-    Reprint Receipt
-  </p>
+        <div class="mt-2 p-2 bg-white rounded-xl border border-slate-200 w-full max-w-lg">
+          <p class="text-[10px] font-black text-slate-400 uppercase mb-2">
+            Reprint Receipt
+          </p>
 
-  <div class="flex flex-wrap gap-2">
-    <!-- Select -->
-    <select
-      id="reprint-select"
-      class="w-full sm:flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-    >
-      <option value="">No previous receipts</option>
-    </select>
+          <div class="flex flex-wrap gap-2">
+            <!-- Select -->
+            <select
+              id="reprint-select"
+              class="w-full sm:flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+            >
+              <option value="">No previous receipts</option>
+            </select>
 
-    <!-- Button -->
-    <button
-      id="btn-reprint"
-      type="button"
-      class="w-full sm:w-auto px-4 py-3 bg-slate-900 text-white font-black rounded-xl text-xs uppercase whitespace-nowrap"
-      onclick="handleReprintReceipt()"
-    >
-      REPRINT
-    </button>
-  </div>
-</div>
+            <!-- Button -->
+            <button
+              id="btn-reprint"
+              type="button"
+              class="w-full sm:w-auto px-4 py-3 bg-slate-900 text-white font-black rounded-xl text-xs uppercase whitespace-nowrap"
+              onclick="handleReprintReceipt()"
+            >
+              REPRINT
+            </button>
+          </div>
+        </div>
 
       </div>
 
@@ -288,29 +284,26 @@
                 <div class="w-48 border-b border-slate-900 mx-auto my-1"></div>
                 <p class="text-[8px] text-slate-400 font-bold uppercase">Authorized Issuer</p>
               </div>
-              
             </div>
-            
+
           </div>
-          
         </div>
-        
       </div>
 
     </div>
-    
   </div>
 
   <!-- HIDDEN CONTAINER FOR PRINTING TWO COPIES -->
   <div id="print-container" class="hidden"></div>
 
+  <!-- ADD STUDENT MODAL -->
   <div id="modal-add-student" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
     <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
       <div class="p-6 border-b border-slate-100 flex justify-between items-center">
         <h3 class="text-xl font-black text-slate-900">Add New Student</h3>
         <button onclick="toggleModal('modal-add-student')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
       </div>
-      <form id="form-add-student" onsubmit="handleManualAdd(event)" class="p-6 space-y-4">
+      <form id="form-add-student" class="p-6 space-y-4">
         <div>
           <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Student ID</label>
           <input type="text" name="sid" required placeholder="2025-XXXX" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
@@ -341,14 +334,10 @@
             <option value="">Select Course</option>
           </select>
         </div>
-        <div>
-          <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Initial Status</label>
-          <select name="status_id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
-            <option value="1">Unpaid</option>
-            <option value="2">Paid</option>
-          </select>
-        </div>
-        <button type="submit" class="w-full py-4 bg-blue-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">Save Record</button>
+
+        <button type="submit" class="w-full py-4 bg-blue-600 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
+          Save Record
+        </button>
       </form>
     </div>
   </div>
@@ -400,35 +389,64 @@
           <input type="text" id="input-sem-manual" placeholder="Or add new semester e.g. 1st Semester" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none">
         </div>
 
-        <button onclick="updateSemester()" class="w-full py-4 bg-slate-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-slate-800 transition-all">
+        <!-- ✅ UPDATED: now uses custom confirmation modal (no browser default confirm) -->
+        <button onclick="requestUpdateTerm()" class="w-full py-4 bg-slate-900 text-white font-black uppercase tracking-widest text-xs rounded-xl hover:bg-slate-800 transition-all">
           Update Term
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Year Modal -->
-  <div id="modal-year-edit" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50">
-    <div class="bg-white p-6 rounded-lg w-[300px]">
-      <h3 class="font-bold text-sm mb-2">Edit Academic Year</h3>
-      <select id="year-select-edit" class="w-full mb-2 border p-2 rounded"></select>
-      <input type="text" id="year-name-edit" placeholder="New Year Name" class="w-full mb-4 border p-2 rounded" />
-      <div class="flex justify-end gap-2">
-        <button class="px-3 py-1 bg-gray-300 rounded" onclick="closeYearModal()">Cancel</button>
-        <button class="px-3 py-1 bg-blue-600 text-white rounded" onclick="updateYear()">Save</button>
+  <!-- ✅ UPDATED UI: Year Modal (Tailwind, not browser prompt/confirm) -->
+  <div id="modal-year-edit" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+        <h3 class="text-xl font-black text-slate-900">Edit Academic Year</h3>
+        <button onclick="closeYearModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="p-6 space-y-3">
+        <label class="text-[10px] font-black text-slate-400 uppercase block">Select Year</label>
+        <select id="year-select-edit" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"></select>
+
+        <input type="hidden" id="year-id-edit" />
+
+        <label class="text-[10px] font-black text-slate-400 uppercase block mt-2">New Year Name</label>
+        <input type="text" id="year-name-edit" placeholder="e.g. 2024-2025" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" />
+
+        <div class="flex justify-end gap-2 pt-3">
+          <button class="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-black uppercase hover:bg-slate-200 transition" onclick="closeYearModal()">Cancel</button>
+          <!-- ✅ UPDATED: custom confirm wrapper -->
+          <button class="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase hover:bg-blue-700 transition" onclick="requestUpdateYear()">Save</button>
+        </div>
+
+        <p class="text-[10px] text-slate-500">
+          This should UPDATE the selected year (not insert a new row).
+        </p>
       </div>
     </div>
   </div>
 
-  <!-- Semester Modal -->
-  <div id="modal-semester-edit" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50">
-    <div class="bg-white p-6 rounded-lg w-[300px]">
-      <h3 class="font-bold text-sm mb-2">Edit Semester</h3>
-      <select id="semester-select-edit" class="w-full mb-2 border p-2 rounded"></select>
-      <input type="text" id="semester-name-edit" placeholder="New Semester Name" class="w-full mb-4 border p-2 rounded" />
-      <div class="flex justify-end gap-2">
-        <button class="px-3 py-1 bg-gray-300 rounded" onclick="closeSemesterModal()">Cancel</button>
-        <button class="px-3 py-1 bg-green-600 text-white rounded" onclick="updateSemesterName()">Save</button>
+  <!-- ✅ UPDATED UI: Semester Modal (Tailwind, not browser prompt/confirm) -->
+  <div id="modal-semester-edit" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+        <h3 class="text-xl font-black text-slate-900">Edit Semester</h3>
+        <button onclick="closeSemesterModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="p-6 space-y-3">
+        <label class="text-[10px] font-black text-slate-400 uppercase block">Select Semester</label>
+        <select id="semester-select-edit" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"></select>
+
+        <label class="text-[10px] font-black text-slate-400 uppercase block mt-2">New Semester Name</label>
+        <input type="text" id="semester-name-edit" placeholder="e.g. 1st Semester" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" />
+
+        <div class="flex justify-end gap-2 pt-3">
+          <button class="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-black uppercase hover:bg-slate-200 transition" onclick="closeSemesterModal()">Cancel</button>
+          <!-- ✅ UPDATED: custom confirm wrapper -->
+          <button class="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-black uppercase hover:bg-green-700 transition" onclick="requestUpdateSemesterName()">Save</button>
+        </div>
       </div>
     </div>
   </div>
@@ -441,8 +459,114 @@
     </div>
   </div>
 
+  <!-- =========================================================
+       ✅ NEW: REUSABLE CONFIRM + ALERT MODALS (NO BROWSER DEFAULT)
+       ========================================================= -->
+
+  <!-- CONFIRM MODAL -->
+  <div id="modal-confirm" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
+            <i data-lucide="help-circle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="confirm-title" class="text-lg font-black text-slate-900">Confirm</h3>
+            <p id="confirm-subtitle" class="text-xs text-slate-500 font-semibold">Please confirm your action.</p>
+          </div>
+        </div>
+        <button onclick="closeConfirm()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="p-6">
+        <p id="confirm-message" class="text-sm text-slate-700 font-medium leading-relaxed">
+          Are you sure you want to continue?
+        </p>
+
+        <div class="flex justify-end gap-2 mt-6">
+          <button id="confirm-cancel" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-black uppercase hover:bg-slate-200 transition" onclick="closeConfirm()">
+            Cancel
+          </button>
+          <button id="confirm-ok" class="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase hover:bg-slate-800 transition">
+            Yes, Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALERT MODAL (success/error/info) -->
+  <div id="modal-alert" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+          <div id="alert-icon-wrap" class="w-10 h-10 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
+            <i id="alert-icon" data-lucide="info" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="alert-title" class="text-lg font-black text-slate-900">Notice</h3>
+            <p id="alert-subtitle" class="text-xs text-slate-500 font-semibold"></p>
+          </div>
+        </div>
+        <button onclick="closeAlert()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="p-6">
+        <p id="alert-message" class="text-sm text-slate-700 font-medium leading-relaxed"></p>
+        <div class="flex justify-end mt-6">
+          <button class="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase hover:bg-blue-700 transition" onclick="closeAlert()">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORT RESULT MODAL -->
+  <div id="modal-import-result" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-green-100 text-green-700 flex items-center justify-center">
+            <i data-lucide="file-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-black text-slate-900">Import Summary</h3>
+            <p class="text-xs text-slate-500 font-semibold">Excel upload results</p>
+          </div>
+        </div>
+        <button onclick="toggleModal('modal-import-result')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="p-6 space-y-3">
+        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+          <div class="flex justify-between text-sm font-bold">
+            <span class="text-slate-700">Uploaded</span>
+            <span id="import-uploaded" class="text-green-700">0</span>
+          </div>
+          <div class="flex justify-between text-sm font-bold mt-2">
+            <span class="text-slate-700">Skipped (Duplicates)</span>
+            <span id="import-skipped" class="text-amber-700">0</span>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button class="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-black uppercase hover:bg-green-700 transition" onclick="toggleModal('modal-import-result')">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
   <script type="module" src="student.js"></script>
-  <script src="../log_user.js"></script>
+  <!-- ========================================================= -->
+ <script src="../log_user.js"></script>
   <script src="../student_modal.js"></script>
+  <script src="modal.js"></script>
+
+ 
+
+ 
 </body>
 </html>

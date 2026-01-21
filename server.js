@@ -17,6 +17,7 @@ const feesRouter = require('./routes/fees');
 const paymentRouter = require('./routes/payment');
 const dashboardRouter = require('./routes/dashboard');
 const rolesRouter = require('./routes/roles');
+const usersRouter = require('./routes/users');
 const app = express();
 
 // --- Middleware ---
@@ -24,6 +25,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
+
 
 // --- API Routes ---
 app.use('/api/login', authRouter);
@@ -35,6 +37,7 @@ app.use('/api/term', termRouter);
 app.use('/api/fees', feesRouter);
 app.use('/api', paymentRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/users', usersRouter);
 
 app.use('/api/roles', rolesRouter);
 // server.js (or your route handler)

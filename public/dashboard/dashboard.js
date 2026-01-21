@@ -25,6 +25,9 @@ let semesters = [];    // [{semester_id, semester_name, year_id?, is_active?}]
 let departments = [];  // [{department_id, department_name, department_abbr}]
 let statuses = [];     // [{status_id, status_name}]
 
+// Remember active term so we can prefer it when switching years
+let activeTermCache = null; // {year_id, semester_id, year}
+
 // ---------- API endpoints (MATCH YOUR SERVER) ----------
 const API = {
   activeTerm: '/api/term/active',
@@ -73,6 +76,55 @@ function getYearLabelById(id) {
   return y ? y.year_name : 'Loading...';
 }
 
+// Normalize year id (some APIs return year_id, others might use id)
+function getYearId(y) {
+  return y?.year_id ?? y?.id ?? y;
+}
+
+// Filter semesters by selected year if semester rows include year_id
+function getSemestersForYear(yearId) {
+  const yid = String(yearId ?? '');
+  if (!yid) return [];
+
+  // If your semesters table includes year_id, filter properly.
+  // If it doesn't, fallback to all semesters.
+  const hasYearId = semesters.some(s => s.year_id != null);
+  const list = hasYearId
+    ? semesters.filter(s => String(s.year_id) === yid)
+    : semesters.slice();
+
+  // Deduplicate by semester_id (fixes duplicates from backend joins)
+  const seen = new Map();
+  for (const s of list) {
+    const key = String(s.semester_id);
+    if (!seen.has(key)) seen.set(key, s);
+  }
+  return Array.from(seen.values());
+}
+
+// Choose the best semester for the currently selected year
+function chooseDefaultSemesterForYear(yearId) {
+  const list = getSemestersForYear(yearId);
+
+  if (!list.length) return null;
+
+  // 1) If active term semester belongs to this year, use it
+  if (
+    activeTermCache?.semester_id != null &&
+    String(activeTermCache?.year_id) === String(yearId)
+  ) {
+    const found = list.find(s => String(s.semester_id) === String(activeTermCache.semester_id));
+    if (found) return found.semester_id;
+  }
+
+  // 2) If any semester row has is_active, prefer it
+  const activeSem = list.find(s => !!s.is_active);
+  if (activeSem) return activeSem.semester_id;
+
+  // 3) Otherwise pick first
+  return list[0].semester_id;
+}
+
 // =======================
 // COLOR LOGIC (UPDATED)
 // =======================
@@ -118,17 +170,21 @@ function initYearGrid() {
 
   years.forEach(y => {
     const item = document.createElement('div');
-    const selected = String(y.year_id) === String(selectedYearId);
+    const selected = String(getYearId(y)) === String(selectedYearId);
     item.className = `year-grid-item ${selected ? 'selected' : ''}`;
     item.innerText = y.year_name;
     item.onclick = (e) => {
       e.stopPropagation();
-      selectYear(y.year_id);
+      selectYear(getYearId(y));
     };
     grid.appendChild(item);
   });
 }
 
+// IMPORTANT FIX:
+// - When you select a year, rebuild semester dropdown for that year
+// - Ensure selectedSemesterId becomes valid for that year
+// - Then updateDashboard() so the student list reflects year + semester
 function selectYear(yearId) {
   selectedYearId = yearId;
 
@@ -138,7 +194,16 @@ function selectYear(yearId) {
   const dd = document.getElementById('year-dropdown');
   if (dd) dd.classList.remove('show');
 
+  // Rebuild year grid highlight
   initYearGrid();
+
+  // Rebuild semester options based on new year
+  buildSemesterSelect();
+
+  // Reset status filter on year change (optional but usually expected)
+  currentStatusId = 'ALL';
+
+  // Refresh dashboard data now that both year+semester are synced
   updateDashboard();
 }
 
@@ -194,21 +259,45 @@ function buildSemesterSelect() {
   const sel = document.getElementById('semester-select');
   if (!sel) return;
 
+  // Always clear to prevent duplicates
   sel.innerHTML = '';
 
-  semesters.forEach(s => {
+  const list = getSemestersForYear(selectedYearId);
+
+  // If currently selected semester does not belong to selected year, choose a valid default
+  const stillValid = list.some(s => String(s.semester_id) === String(selectedSemesterId));
+  if (!stillValid) {
+    selectedSemesterId = chooseDefaultSemesterForYear(selectedYearId);
+  }
+
+  // Build options (deduped already)
+  list.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.semester_id;
     opt.textContent = s.semester_name;
     sel.appendChild(opt);
   });
 
-  if (selectedSemesterId == null && semesters.length) {
-    selectedSemesterId = semesters[0].semester_id;
+  // If nothing available, keep null
+  if (!list.length) {
+    selectedSemesterId = null;
+    return;
   }
+
+  // Ensure UI reflects selectedSemesterId
   if (selectedSemesterId != null) {
     sel.value = String(selectedSemesterId);
+  } else {
+    // fallback
+    selectedSemesterId = list[0].semester_id;
+    sel.value = String(selectedSemesterId);
   }
+
+  // Optional: ensure change updates state + dashboard (HTML onchange also calls updateDashboard)
+  sel.onchange = () => {
+    selectedSemesterId = sel.value;
+    updateDashboard();
+  };
 }
 
 function buildStatusCards(byStatus) {
@@ -360,7 +449,6 @@ async function updateDashboard() {
   }
 }
 
-
 // ============================================
 // Preview table (first 5)
 // ============================================
@@ -421,16 +509,15 @@ function renderChart(paidCount, otherCount, paidLikeId) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-  tooltip: {
-    enabled: true,
-    callbacks: {
-      label: (context) => {
-        return context.dataIndex === 0 ? 'Paid' : 'Unpaid';
-      }
-    }
-  }
-},
-
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            label: (context) => {
+              return context.dataIndex === 0 ? 'Paid' : 'Unpaid';
+            }
+          }
+        }
+      },
       onClick: (_, el) => {
         if (!el.length) return;
         // click green slice filters Paid status, click other clears filter
@@ -535,6 +622,15 @@ async function loadReferenceData() {
   departments = dept?.success ? (dept.departments || []) : [];
   statuses = st?.success ? (st.statuses || []) : [];
 
+  // Cache active term for smarter defaults when changing years
+  activeTermCache = activeTerm?.success
+    ? {
+        year_id: activeTerm.year_id,
+        semester_id: activeTerm.semester_id,
+        year: activeTerm.year
+      }
+    : null;
+
   if (activeTerm?.success) {
     selectedYearId = activeTerm.year_id;
     selectedSemesterId = activeTerm.semester_id;
@@ -548,11 +644,11 @@ async function loadReferenceData() {
     const ayDisplay = document.getElementById('current-ay-display');
     if (ayDisplay) ayDisplay.innerText = selectedYearId ? getYearLabelById(selectedYearId) : 'No Year Found';
 
-    selectedSemesterId = semesters.length ? semesters[0].semester_id : null;
+    selectedSemesterId = chooseDefaultSemesterForYear(selectedYearId);
   }
 
   initYearGrid();
-  buildSemesterSelect();
+  buildSemesterSelect();      // now filters & dedupes, and syncs selectedSemesterId
   buildDepartmentButtons();
   lucide.createIcons();
 }
@@ -561,6 +657,8 @@ async function loadReferenceData() {
 // Close year dropdown when clicking outside
 // ============================================
 window.onclick = (e) => {
+  // Keep your logic, but make sure it doesn't accidentally close when clicking inside dropdown controls
+  // The dropdown container is inside the ".relative" wrapper in your HTML.
   if (!e.target.closest('.relative')) {
     const dd = document.getElementById('year-dropdown');
     if (dd) dd.classList.remove('show');

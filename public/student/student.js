@@ -32,6 +32,72 @@ let lastReceipt = {
 // UI mode (prevents PAY/PRINT overlapping with reprint controls)
 let receiptMode = 'PAY'; // 'PAY' | 'REPRINT'
 
+// ----------------- MODAL-FIRST HELPERS (NO BROWSER DEFAULT) -----------------
+function hasModalAlert() {
+  return typeof window.openAlert === 'function';
+}
+function hasModalConfirm() {
+  return typeof window.openConfirm === 'function';
+}
+
+function uiAlert(message, type = 'info', title = 'Notice', subtitle = '') {
+  if (hasModalAlert()) {
+    window.openAlert({ type, title, subtitle, message: String(message ?? '') });
+  } else {
+    alert(String(message ?? ''));
+  }
+}
+
+/**
+ * Promise-based confirm. Uses Tailwind confirm modal if available.
+ * @returns {Promise<boolean>}
+ */
+function uiConfirm({
+  title = 'Confirm',
+  subtitle = 'Please confirm your action.',
+  message = 'Are you sure you want to continue?',
+  okText = 'Yes, Continue',
+  okClass = 'bg-slate-900 hover:bg-slate-800',
+  cancelText = 'Cancel'
+} = {}) {
+  if (hasModalConfirm()) {
+    return new Promise(resolve => {
+      window.openConfirm({
+        title,
+        subtitle,
+        message,
+        okText,
+        okClass,
+        cancelText,
+        onConfirm: () => resolve(true)
+      });
+
+      const originalClose = window.closeConfirm;
+      if (typeof originalClose === 'function') {
+        window.closeConfirm = function () {
+          try { originalClose(); } finally {
+            resolve(false);
+            window.closeConfirm = originalClose;
+          }
+        };
+      }
+    });
+  }
+
+  return Promise.resolve(confirm(message));
+}
+
+// ----------------- HELPERS -----------------
+function getStudentRoleString(student) {
+  // officer => "1", non-officer => "0"
+  return student?.is_officer ? '1' : '0';
+}
+
+function money(n) {
+  const v = Number(n || 0);
+  return v.toLocaleString(undefined, { minimumFractionDigits: 2 });
+}
+
 // ----------------- UI HELPERS (no-overlap controls) -----------------
 function setReceiptMode(mode) {
   receiptMode = mode === 'REPRINT' ? 'REPRINT' : 'PAY';
@@ -39,36 +105,21 @@ function setReceiptMode(mode) {
   const payBtn = document.getElementById('btn-pay-now');
   const feesContainer = document.getElementById('fees-container');
 
-  // When reprinting, you usually don't want the PAY button competing for space.
   if (payBtn) {
-    if (receiptMode === 'REPRINT') {
-      payBtn.classList.add('hidden');
-    } else {
-      payBtn.classList.remove('hidden');
-    }
+    if (receiptMode === 'REPRINT') payBtn.classList.add('hidden');
+    else payBtn.classList.remove('hidden');
   }
 
-  // Optional: disable fee interactions in REPRINT mode (prevents changes + keeps layout stable)
   if (feesContainer) {
-    if (receiptMode === 'REPRINT') {
-      feesContainer.classList.add('pointer-events-none', 'opacity-70');
-    } else {
-      feesContainer.classList.remove('pointer-events-none', 'opacity-70');
-    }
+    if (receiptMode === 'REPRINT') feesContainer.classList.add('pointer-events-none', 'opacity-70');
+    else feesContainer.classList.remove('pointer-events-none', 'opacity-70');
   }
 
-  // Make action row wrap so it won't overlap with dropdowns on small widths
-  // (works even if you don't have these IDs; it's safe).
   const actions = document.getElementById('receipt-actions') || document.getElementById('payment-actions');
-  if (actions) {
-    actions.classList.add('flex', 'flex-wrap', 'gap-2', 'items-center');
-  }
+  if (actions) actions.classList.add('flex', 'flex-wrap', 'gap-2', 'items-center');
 
-  // Make reprint wrapper take full width so it doesn't collide with buttons
   const reprintWrap = document.getElementById('reprint-wrap');
-  if (reprintWrap) {
-    reprintWrap.classList.add('w-full');
-  }
+  if (reprintWrap) reprintWrap.classList.add('w-full');
 }
 
 function resetReprintUI() {
@@ -77,18 +128,13 @@ function resetReprintUI() {
   setReceiptMode('PAY');
 }
 
-// If you have a "Reprint" button in HTML, wire it here.
-// (Safe if button not present.)
 function setupReprintControls() {
   const sel = document.getElementById('reprint-select');
   if (sel && !sel.dataset.bound) {
     sel.addEventListener('change', () => {
-      // If user selects a receipt, switch to REPRINT mode.
-      // If they clear it, go back to PAY mode.
       if (sel.value) {
         setReceiptMode('REPRINT');
       } else {
-        // allow paying again
         receiptLocked = false;
         unlockTotal();
         setReceiptMode('PAY');
@@ -98,37 +144,69 @@ function setupReprintControls() {
   }
 }
 
-window.updateSemester = async function updateSemester() {
+// ----------------- TERM / SEMESTER UPDATE (FIXED) -----------------
+window.requestUpdateTerm = async function requestUpdateTerm() {
   const yearInput = document.getElementById('input-ay')?.value.trim();
-  const semesterInput = document.getElementById('input-sem-manual')?.value.trim();
+  const semInput = document.getElementById('input-sem-manual')?.value.trim();
 
   const yearSelect = document.getElementById('select-year');
   const semSelect = document.getElementById('select-sem');
 
-  const year = yearInput || yearSelect?.options?.[yearSelect.selectedIndex]?.textContent;
-  const semester = semesterInput || semSelect?.options?.[semSelect.selectedIndex]?.textContent;
+  const yearName =
+    yearInput ||
+    yearSelect?.selectedOptions?.[0]?.textContent?.trim();
+
+  const semName =
+    semInput ||
+    semSelect?.selectedOptions?.[0]?.textContent?.trim();
+
+  if (!yearName || !semName) {
+    uiAlert('Please select or enter both Academic Year and Semester.', 'warning', 'Missing Fields');
+    return;
+  }
 
   try {
-    const data = await updateTerm({ year, semester });
-    if (data.success) {
-      alert('Term updated successfully!');
+    const data = await updateTerm({ year: yearName, semester: semName });
 
-      // clear manual inputs
-      if (document.getElementById('input-ay')) document.getElementById('input-ay').value = '';
-      if (document.getElementById('input-sem-manual')) document.getElementById('input-sem-manual').value = '';
+    if (!data.success) {
+      uiAlert(data.message || 'Failed to update term.', 'error', 'Update Failed');
+      return;
+    }
 
-      // refresh UI
-      await loadActiveTerm();
+    uiAlert('Term updated successfully!', 'success', 'Updated');
+
+    // clear manual inputs
+    const ay = document.getElementById('input-ay');
+    const sm = document.getElementById('input-sem-manual');
+    if (ay) ay.value = '';
+    if (sm) sm.value = '';
+
+    // refresh active term label (and CURRENT_YEAR_SEMESTER_ID)
+    await loadActiveTerm();
+
+    // refresh dropdowns to reflect active
+    try {
+      const active = await fetchActiveTerm();
+      if (active?.success) {
+        await populateYearDropdown(active.year_id);
+        await populateSemesterDropdown(active.year_id, active.semester_id);
+      } else {
+        await populateYearDropdown();
+        await populateSemesterDropdown();
+      }
+    } catch {
       await populateYearDropdown();
       await populateSemesterDropdown();
-
-      toggleModal('modal-semester');
-    } else {
-      alert('Error: ' + data.message);
     }
+
+    // reload students for the new term
+    await loadStudents();
+
+    // close modal
+    toggleModal('modal-semester');
   } catch (err) {
     console.error('Failed to update term:', err);
-    alert('Failed to update term: ' + err.message);
+    uiAlert('Failed to update term: ' + (err.message || String(err)), 'error', 'Update Failed');
   }
 };
 
@@ -145,7 +223,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupPayButton();
   setupReprintControls();
 
-  // Event listeners
   document.getElementById('select-department')?.addEventListener('change', e => loadCourses(e.target.value));
   const addStudentForm = document.getElementById('form-add-student');
   if (addStudentForm) addStudentForm.addEventListener('submit', handleManualAdd);
@@ -199,28 +276,24 @@ function renderReceiptFromDbReceipt(receipt) {
     return `
       <div class="flex justify-between">
         <span class="font-bold">${it.fee_name || `Fee #${it.fee_id}`}</span>
-        <span class="font-mono font-bold">₱${amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        <span class="font-mono font-bold">₱${money(amt)}</span>
       </div>
     `;
   }).join('');
 
   const total = Number(receipt.total_amount || 0);
-  totalEl.innerText = '₱' + total.toLocaleString(undefined, { minimumFractionDigits: 2 });
+  totalEl.innerText = '₱' + money(total);
 }
 
-// Optional: reprint UI hook (if you added the dropdown/button)
 async function handleReprintReceipt() {
-  if (!activeStudent) return alert('No student selected.');
+  if (!activeStudent) return uiAlert('No student selected.', 'warning', 'Reprint');
 
   const sel = document.getElementById('reprint-select');
   const cn = sel?.value;
-  if (!cn) return alert('Please select a receipt to reprint.');
+  if (!cn) return uiAlert('Please select a receipt to reprint.', 'warning', 'Reprint');
 
   try {
-    // Switch UI mode to prevent overlapping (hide PAY button, wrap actions, etc.)
     setReceiptMode('REPRINT');
-
-    // lock selection totals so receipt does not get overwritten
     lockTotal();
     receiptLocked = true;
 
@@ -228,10 +301,57 @@ async function handleReprintReceipt() {
     renderReceiptFromDbReceipt(receipt);
   } catch (err) {
     console.error(err);
-    alert(err.message || 'Failed to reprint receipt.');
+    uiAlert(err.message || 'Failed to reprint receipt.', 'error', 'Reprint Failed');
   }
 }
 window.handleReprintReceipt = handleReprintReceipt;
+
+async function removeStudent(studentId) {
+  const student = (studentDb || []).find(s => String(s.student_id) === String(studentId));
+
+  if (student && Number(student.status_id) === 2) {
+    uiAlert('Cannot delete this student because the status is PAID.', 'warning', 'Delete Blocked');
+    return;
+  }
+
+  const ok = await uiConfirm({
+    title: 'Delete Student',
+    subtitle: 'This will perform a soft delete.',
+    message: `Delete/Remove student ${studentId}?`,
+    okText: 'Yes, Delete',
+    okClass: 'bg-red-600 hover:bg-red-700'
+  });
+  if (!ok) return;
+
+  try {
+    const res = await fetch('http://localhost:3000/api/students/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: studentId })
+    });
+
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch { throw new Error(`Remove route not returning JSON (HTTP ${res.status}).`); }
+
+    if (!res.ok || !data.success) throw new Error(data.message || 'Failed to delete student.');
+
+    studentDb = studentDb.filter(s => String(s.student_id) !== String(studentId));
+
+    renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
+    lucide.createIcons();
+
+    if (activeStudent && String(activeStudent.student_id) === String(studentId)) {
+      closePayment();
+    }
+
+    uiAlert('Student deleted (soft delete).', 'success', 'Deleted');
+  } catch (err) {
+    console.error(err);
+    uiAlert(err.message || 'Delete failed.', 'error', 'Delete Failed');
+  }
+}
 
 // ----------------- FEES -----------------
 async function loadFees() {
@@ -256,15 +376,18 @@ async function loadActiveTerm() {
     const data = await fetchActiveTerm();
     if (data.success) {
       window.CURRENT_YEAR_SEMESTER_ID = data.semester_id;
-      document.getElementById('active-term').textContent = `${data.semester} ${data.year}`;
+      const el = document.getElementById('active-term');
+      if (el) el.textContent = `${data.semester} ${data.year}`;
     } else {
       window.CURRENT_YEAR_SEMESTER_ID = null;
-      document.getElementById('active-term').textContent = 'No active term';
+      const el = document.getElementById('active-term');
+      if (el) el.textContent = 'No active term';
     }
   } catch (err) {
     console.error('Failed to load active term:', err);
     window.CURRENT_YEAR_SEMESTER_ID = null;
-    document.getElementById('active-term').textContent = 'Error loading term';
+    const el = document.getElementById('active-term');
+    if (el) el.textContent = 'Error loading term';
   }
 }
 
@@ -289,6 +412,8 @@ async function loadStatuses() {
     if (data.success) {
       statusMap = {};
       const select = document.getElementById('filter-status');
+      if (!select) return;
+
       select.innerHTML = '<option value="All">All Status</option>';
       data.statuses.forEach(s => {
         statusMap[s.status_id] = s.status_name;
@@ -311,7 +436,9 @@ async function loadStudents() {
     const data = await fetchStudents();
     if (data.success) {
       studentDb = data.students;
-      renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment');
+
+      renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
+      lucide.createIcons();
     }
   } catch (err) {
     console.error('Failed to load students:', err);
@@ -350,28 +477,45 @@ async function handleManualAdd(e) {
     student_lastname: form.lname.value.trim(),
     department_id: parseInt(form.department_id.value),
     course_id: parseInt(form.course_id.value),
-    status_id: parseInt(form.status_id.value),
-    year_semester_id: Number(window.CURRENT_YEAR_SEMESTER_ID) // ✅ ensure added to current term
+    status_id: 1,
+    year_semester_id: Number(window.CURRENT_YEAR_SEMESTER_ID)
   };
 
   if (!payload.student_id || !payload.student_firstname || !payload.student_lastname || !payload.department_id || !payload.course_id) {
-    return alert('Please fill in all required fields.');
+    uiAlert('Please fill in all required fields.', 'warning', 'Missing Fields');
+    return;
   }
 
   try {
     const data = await addStudent(payload);
     if (data.success) {
-      alert('Student added successfully');
+      if (typeof window.showStudentAddedSuccess === 'function') {
+        window.showStudentAddedSuccess(payload.student_id);
+      } else {
+        uiAlert('Student added successfully', 'success', 'Student Added');
+      }
+
       form.reset();
       toggleModal('modal-add-student');
       await loadStudents();
     } else {
       console.warn('Add student failed:', data.message);
-      if (!data.message.includes('already exists')) alert('Error: ' + data.message);
+
+      const msg = String(data.message || '');
+      if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('duplicate')) {
+        if (typeof window.showStudentDuplicateError === 'function') {
+          window.showStudentDuplicateError(payload.student_id);
+        } else {
+          uiAlert(`Duplicate: ${payload.student_id} already exists.`, 'error', 'Duplicate Student');
+        }
+        return;
+      }
+
+      uiAlert('Error: ' + (data.message || 'Failed to add student'), 'error', 'Add Failed');
     }
   } catch (err) {
     console.error('Error adding student:', err);
-    alert('Error adding student: ' + err.message);
+    uiAlert('Error adding student: ' + err.message, 'error', 'Add Failed');
   }
 }
 
@@ -379,15 +523,15 @@ async function handleManualAdd(e) {
 async function toggleOfficer(studentId, isChecked) {
   try {
     const data = await toggleOfficerStatus(studentId, isChecked);
-    if (!data.success) alert('Failed to update officer status: ' + data.message);
+    if (!data.success) uiAlert('Failed to update officer status: ' + data.message, 'error', 'Update Failed');
     await loadStudents();
   } catch (err) {
     console.error('Error toggling officer:', err);
-    alert('Error toggling officer: ' + err.message);
+    uiAlert('Error toggling officer: ' + err.message, 'error', 'Update Failed');
   }
 }
 
-// ----------------- SEMESTER DROPDOWNS -----------------
+// ----------------- SEMESTER DROPDOWNS (FIXED: year-aware + ids) -----------------
 async function populateYearDropdown(selectedYearId = null) {
   const select = document.getElementById('select-year');
   if (!select) return;
@@ -407,7 +551,7 @@ async function populateYearDropdown(selectedYearId = null) {
       const option = document.createElement('option');
       option.value = y.year_id;
       option.textContent = y.year_name;
-      if (selectedYearId ? y.year_id === selectedYearId : y.is_active) option.selected = true;
+      if (selectedYearId ? String(y.year_id) === String(selectedYearId) : y.is_active) option.selected = true;
       select.appendChild(option);
     });
   } catch (err) {
@@ -416,34 +560,45 @@ async function populateYearDropdown(selectedYearId = null) {
   }
 }
 
-async function populateSemesterDropdown(selectedSemester = null) {
+async function populateSemesterDropdown(yearId = null, selectedSemesterId = null) {
   const select = document.getElementById('select-sem');
   if (!select) return;
-  select.innerHTML = '';
+
+  select.innerHTML = '<option value="">Loading...</option>';
 
   try {
-    const res = await fetch('http://localhost:3000/api/term/semesters');
+    const url = yearId
+      ? `http://localhost:3000/api/term/semesters?year_id=${encodeURIComponent(yearId)}`
+      : `http://localhost:3000/api/term/semesters`;
+
+    const res = await fetch(url);
     const data = await res.json();
 
-    if (data.success && Array.isArray(data.semesters) && data.semesters.length > 0) {
-      const uniqueSem = [...new Set(data.semesters.map(s => s.semester_name))];
-      uniqueSem.forEach(s => {
-        const option = document.createElement('option');
-        option.value = s;
-        option.textContent = s;
-        if (selectedSemester && s === selectedSemester) option.selected = true;
-        select.appendChild(option);
-      });
-    } else {
-      select.innerHTML = '<option disabled>No semesters found</option>';
+    select.innerHTML = '';
+
+    if (!data.success || !Array.isArray(data.semesters) || data.semesters.length === 0) {
+      select.innerHTML = '<option value="" disabled>No semesters found</option>';
+      return;
     }
+
+    data.semesters.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.semester_id;            // ✅ id
+      opt.textContent = s.semester_name;    // ✅ name
+      if (selectedSemesterId && String(s.semester_id) === String(selectedSemesterId)) {
+        opt.selected = true;
+      } else if (!selectedSemesterId && s.is_active) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    });
   } catch (err) {
     console.error('Failed to load semesters:', err);
-    select.innerHTML = '<option disabled>Error loading semesters</option>';
+    select.innerHTML = '<option value="" disabled>Error loading semesters</option>';
   }
 }
 
-// ----------------- MODALS -----------------
+// ----------------- MODALS (FIXED: bind year->semester + open with active term) -----------------
 function toggleModal(modalId) {
   const modal = document.getElementById(modalId);
   if (!modal) return;
@@ -451,16 +606,32 @@ function toggleModal(modalId) {
 
   if (!modal.classList.contains('hidden')) {
     if (modalId === 'modal-semester') {
-      populateSemesterDropdown();
       fetch('http://localhost:3000/api/term/active')
         .then(res => res.json())
-        .then(data => {
-          if (data.success && data.year_id) populateYearDropdown(data.year_id);
-          else populateYearDropdown();
+        .then(async data => {
+          if (data.success && data.year_id) {
+            await populateYearDropdown(data.year_id);
+            await populateSemesterDropdown(data.year_id, data.semester_id);
+          } else {
+            await populateYearDropdown();
+            const yearSel = document.getElementById('select-year');
+            await populateSemesterDropdown(yearSel?.value || null, null);
+          }
+
+          // bind once: changing year reloads semester dropdown
+          const yearSel = document.getElementById('select-year');
+          if (yearSel && !yearSel.dataset.bound) {
+            yearSel.addEventListener('change', async () => {
+              await populateSemesterDropdown(yearSel.value, null);
+            });
+            yearSel.dataset.bound = '1';
+          }
         })
-        .catch(err => {
+        .catch(async err => {
           console.error('Failed to fetch active term:', err);
-          populateYearDropdown();
+          await populateYearDropdown();
+          const yearSel = document.getElementById('select-year');
+          await populateSemesterDropdown(yearSel?.value || null, null);
         });
     }
 
@@ -546,11 +717,10 @@ function renderReceiptWithAlreadyPaid({
 
     if (currentSet.has(feeId)) {
       total += price;
-      const priceFmt = price.toLocaleString(undefined, { minimumFractionDigits: 2 });
       lines.push(`
         <div class="flex justify-between">
           <span class="font-bold">${feeName}</span>
-          <span class="font-mono font-bold">₱${priceFmt}</span>
+          <span class="font-mono font-bold">₱${money(price)}</span>
         </div>
       `);
     }
@@ -565,10 +735,10 @@ function renderReceiptWithAlreadyPaid({
   }
 
   recFeesList.innerHTML = lines.join('');
-  recTotal.innerText = '₱' + total.toLocaleString(undefined, { minimumFractionDigits: 2 });
+  recTotal.innerText = '₱' + money(total);
 }
 
-// ✅ Render receipt using the saved lastReceipt (so it won’t disappear after you uncheck/disable)
+// ✅ FIXED: Render receipt using the saved lastReceipt snapshot
 function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
   const recFeesList = document.getElementById('rec-fees-list');
   const recTotal = document.getElementById('rec-total');
@@ -586,46 +756,52 @@ function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
       })
     : '---';
 
-  if (issuerEl && lastReceipt.issuedBy) issuerEl.innerText = lastReceipt.issuedBy;
-  if (studentEl && lastReceipt.studentName) studentEl.innerText = lastReceipt.studentName;
+  if (issuerEl) issuerEl.innerText = lastReceipt.issuedBy || (issuerEl.innerText || 'Cashier');
+  if (studentEl) studentEl.innerText = lastReceipt.studentName || (studentEl.innerText || '');
 
   const paidBeforeSet = new Set([...paidFeeIdsBefore].map(Number));
-  const currentSet = new Set(lastReceipt.items.map(x => Number(x.fee_id)));
+  const feeMap = new Map((availableFees || []).map(f => [Number(f.fee_id), f]));
 
-  let total = 0;
   const lines = [];
+  let total = 0;
 
-  for (const fee of availableFees) {
-    const feeId = Number(fee.fee_id);
-    const feeName = fee.fee_name;
-    const price = Number(fee.fee_amount || 0);
-
-    if (paidBeforeSet.has(feeId) && !currentSet.has(feeId)) {
-      lines.push(`
-        <div class="flex justify-between items-center">
-          <span class="font-bold">${feeName}</span>
-          <span class="text-[10px] font-black text-emerald-600 uppercase">Already Paid</span>
-        </div>
-      `);
-      continue;
+  if (Array.isArray(availableFees) && availableFees.length) {
+    for (const fee of availableFees) {
+      const feeId = Number(fee.fee_id);
+      if (paidBeforeSet.has(feeId) && !(lastReceipt.items || []).some(x => Number(x.fee_id) === feeId)) {
+        lines.push(`
+          <div class="flex justify-between items-center">
+            <span class="font-bold">${fee.fee_name}</span>
+            <span class="text-[10px] font-black text-emerald-600 uppercase">Already Paid</span>
+          </div>
+        `);
+      }
     }
+  }
 
-    if (currentSet.has(feeId)) {
-      total += price;
-      lines.push(`
-        <div class="flex justify-between">
-          <span class="font-bold">${feeName}</span>
-          <span class="font-mono font-bold">₱${price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-        </div>
-      `);
-    }
+  for (const it of (lastReceipt.items || [])) {
+    const feeId = Number(it.fee_id);
+    const amt = Number(it.amount_paid || 0);
+    total += amt;
+
+    const displayName =
+      it.fee_name ||
+      feeMap.get(feeId)?.fee_name ||
+      `Fee #${feeId}`;
+
+    lines.push(`
+      <div class="flex justify-between">
+        <span class="font-bold">${displayName}</span>
+        <span class="font-mono font-bold">₱${money(amt)}</span>
+      </div>
+    `);
   }
 
   recFeesList.innerHTML = lines.length
     ? lines.join('')
     : `<p class="text-slate-400 italic">No fees selected</p>`;
 
-  recTotal.innerText = '₱' + total.toLocaleString(undefined, { minimumFractionDigits: 2 });
+  recTotal.innerText = '₱' + money(total);
 }
 
 // Bind PAY button once
@@ -648,11 +824,9 @@ async function openPayment(studentId) {
   setupPayButton();
   setupReprintControls();
 
-  // reset receipt state for this open
   receiptLocked = false;
   lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
 
-  // IMPORTANT: reset reprint selection + go back to PAY mode (prevents overlap right away)
   resetReprintUI();
 
   const studentName = `${activeStudent.student_firstname} ${activeStudent.student_lastname}`;
@@ -662,17 +836,18 @@ async function openPayment(studentId) {
   const issuerName = document.getElementById('user-role')?.innerText || 'Cashier';
   document.getElementById('rec-issuer-name').innerText = issuerName;
 
-  if (!Array.isArray(feesDb) || feesDb.length === 0) return alert('No fees available.');
+  if (!Array.isArray(feesDb) || feesDb.length === 0) {
+    uiAlert('No fees available.', 'warning', 'Fees');
+    return;
+  }
 
-  // ✅ FILTER FEES BY ACTIVE SEMESTER + ROLE
-  const studentRole = activeStudent.is_officer ? '1' : '0';
+  const studentRole = getStudentRoleString(activeStudent);
   const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
 
   const availableFees = (feesDb || [])
     .filter(fee => Number(fee.semester_id) === termId)
     .filter(fee => String(fee.role) === String(studentRole));
 
-  // Fetch DB payments (✅ now semester-aware via querystring)
   let payments = [];
   try {
     payments = await fetchStudentPayments(activeStudent.student_id);
@@ -684,7 +859,6 @@ async function openPayment(studentId) {
   const paidFeeIds = new Set(payments.map(p => Number(p.fee_id)).filter(n => Number.isFinite(n)));
   paymentCacheByStudent[activeStudent.student_id] = { payments, paidFeeIds };
 
-  // Optional: populate reprint dropdown if exists (✅ term-aware)
   const reprintSelect = document.getElementById('reprint-select');
   if (reprintSelect) {
     try {
@@ -697,8 +871,7 @@ async function openPayment(studentId) {
           `<option value="">Select a receipt...</option>` +
           txns.map(t => {
             const dt = t.payment_date ? new Date(t.payment_date) : null;
-            const label =
-              `${t.control_number} — ${dt ? dt.toLocaleString() : ''} — ₱${Number(t.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+            const label = `${t.control_number} — ${dt ? dt.toLocaleString() : ''} — ₱${money(t.total_amount)}`;
             return `<option value="${t.control_number}">${label}</option>`;
           }).join('');
       }
@@ -708,17 +881,33 @@ async function openPayment(studentId) {
     }
   }
 
-  // Build fee list UI
   const feesContainer = document.getElementById('fees-container');
   if (!feesContainer) return console.error('Fees container not found!');
   feesContainer.innerHTML = '';
+
+  const getPaidFeeIdsNow = () =>
+    paymentCacheByStudent[activeStudent.student_id]?.paidFeeIds || paidFeeIds;
+
+  const startNewSelectionSessionIfNeeded = () => {
+    if (!receiptLocked) return;
+
+    receiptLocked = false;
+    unlockTotal();
+
+    lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
+
+    const recTid = document.getElementById('rec-tid');
+    const recDate = document.getElementById('rec-date');
+    if (recTid) recTid.innerText = '---';
+    if (recDate) recDate.innerText = '---';
+  };
 
   if (availableFees.length === 0) {
     feesContainer.innerHTML = `<p class="text-slate-400 italic text-xs">No applicable fees for this student (this semester)</p>`;
   } else {
     availableFees.forEach(fee => {
-      const priceFormatted = parseFloat(fee.fee_amount).toLocaleString(undefined, { minimumFractionDigits: 2 });
-      const isPaid = paidFeeIds.has(Number(fee.fee_id));
+      const priceFormatted = money(fee.fee_amount);
+      const isPaid = getPaidFeeIdsNow().has(Number(fee.fee_id));
 
       const label = document.createElement('label');
       label.className =
@@ -747,9 +936,8 @@ async function openPayment(studentId) {
         label.classList.remove('cursor-pointer', 'hover:border-blue-300');
       } else {
         cb.addEventListener('change', () => {
-          if (receiptLocked) return;
+          startNewSelectionSessionIfNeeded();
 
-          // updates selection total only (utils.js must not write into receipt)
           calculateTotalFees();
 
           const selectedIds = [...document.querySelectorAll('#fees-container .fee-checkbox:checked')]
@@ -757,10 +945,11 @@ async function openPayment(studentId) {
             .map(x => Number(x.getAttribute('data-fee-id')))
             .filter(n => Number.isFinite(n));
 
-          // live preview while selecting
+          const paidNow = getPaidFeeIdsNow();
+
           renderReceiptWithAlreadyPaid({
             availableFees,
-            paidFeeIdsBefore: paidFeeIds,
+            paidFeeIdsBefore: paidNow,
             currentTxnFeeIds: selectedIds,
             controlNumber: null,
             paymentDate: null
@@ -772,19 +961,16 @@ async function openPayment(studentId) {
     });
   }
 
-  // selection total
   calculateTotalFees();
 
-  // initial receipt: show Already Paid only, total 0
   renderReceiptWithAlreadyPaid({
     availableFees,
-    paidFeeIdsBefore: paidFeeIds,
+    paidFeeIdsBefore: getPaidFeeIdsNow(),
     currentTxnFeeIds: [],
     controlNumber: null,
     paymentDate: null
   });
 
-  // clear meta
   const recTid = document.getElementById('rec-tid');
   const recDate = document.getElementById('rec-date');
   if (recTid) recTid.innerText = '---';
@@ -804,17 +990,23 @@ async function handlePayNow() {
   const payBtn = document.getElementById('btn-pay-now');
   if (payBtn?.disabled) return;
 
-  if (!activeStudent) return alert('No active student selected.');
-
-  // If user is in REPRINT mode, don't allow PAY (prevents UI weirdness and overlap).
-  if (receiptMode === 'REPRINT') {
-    alert('Currently viewing a previous receipt. Clear the reprint selection to continue paying.');
+  if (!activeStudent) {
+    uiAlert('No active student selected.', 'warning', 'Payment');
     return;
   }
 
-  // ✅ role + term aware available fees (used for receipt renderer)
-  const studentRole = activeStudent.is_officer ? '0' : '1';
+  if (receiptMode === 'REPRINT') {
+    uiAlert('Currently viewing a previous receipt. Clear the reprint selection to continue paying.', 'warning', 'Payment');
+    return;
+  }
+
   const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
+  if (!Number.isFinite(termId) || termId <= 0) {
+    uiAlert('No active term found.', 'warning', 'Payment');
+    return;
+  }
+
+  const studentRole = getStudentRoleString(activeStudent);
 
   const availableFees = (feesDb || [])
     .filter(fee => Number(fee.semester_id) === termId)
@@ -826,9 +1018,11 @@ async function handlePayNow() {
   const checked = [...document.querySelectorAll('#fees-container .fee-checkbox:checked')]
     .filter(cb => !cb.disabled);
 
-  if (checked.length === 0) return alert('Please select at least one unpaid fee to pay.');
+  if (checked.length === 0) {
+    uiAlert('Please select at least one unpaid fee to pay.', 'warning', 'Payment');
+    return;
+  }
 
-  // snapshot selected items BEFORE unchecking/disable
   const selectedItems = checked.map(cb => ({
     fee_id: Number(cb.getAttribute('data-fee-id')),
     fee_name: cb.getAttribute('data-fee') || cb.dataset.fee || 'Fee',
@@ -838,14 +1032,14 @@ async function handlePayNow() {
   );
 
   const feesToPay = selectedItems.map(x => ({ fee_id: x.fee_id, amount_paid: x.amount_paid }));
-  if (feesToPay.length === 0) return alert('Could not read selected fees (missing data-fee-id).');
+  if (feesToPay.length === 0) {
+    uiAlert('Could not read selected fees (missing data-fee-id).', 'error', 'Payment Failed');
+    return;
+  }
 
-  // ✅ visible fees = for status evaluation; must be term-filtered too
   const visibleFeeIds = getVisibleFeeCheckboxes()
     .map(cb => Number(cb.getAttribute('data-fee-id')))
     .filter(n => Number.isFinite(n) && n > 0);
-
-  if (visibleFeeIds.length === 0) return alert('No visible fees found for status evaluation.');
 
   const controlNumber = generateControlNumber();
   const issuedBy = document.getElementById('user-role')?.innerText || 'Cashier';
@@ -861,7 +1055,7 @@ async function handlePayNow() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         student_id: activeStudent.student_id,
-        semester_id: termId, // ✅ IMPORTANT: send term id
+        semester_id: termId,
         issued_by: issuedBy,
         control_number: controlNumber,
         fees: feesToPay,
@@ -881,7 +1075,6 @@ async function handlePayNow() {
 
     const now = new Date();
 
-    // save last receipt for printing (persist UI even after disabling/unchecking)
     lastReceipt = {
       controlNumber,
       dateISO: now.toISOString(),
@@ -890,16 +1083,12 @@ async function handlePayNow() {
       items: selectedItems
     };
 
-    // lock total display (selection)
-    lockTotal();
-
-    // lock receipt (prevents checkbox changes from overwriting it)
     receiptLocked = true;
 
-    // render receipt from saved snapshot (NOT from checkboxes)
     renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees });
 
-    // refresh DB truth (✅ semester-aware)
+    lockTotal(selectedItems.reduce((s, i) => s + Number(i.amount_paid || 0), 0));
+
     let payments = [];
     try {
       payments = await fetchStudentPayments(activeStudent.student_id);
@@ -911,7 +1100,6 @@ async function handlePayNow() {
     const paidFeeIdsAfter = new Set(payments.map(p => Number(p.fee_id)).filter(n => Number.isFinite(n)));
     paymentCacheByStudent[activeStudent.student_id] = { payments, paidFeeIds: paidFeeIdsAfter };
 
-    // disable newly paid fees (unchecked so selection totals remain correct)
     document.querySelectorAll('#fees-container .fee-checkbox').forEach(cb => {
       const feeId = Number(cb.getAttribute('data-fee-id'));
       if (paidFeeIdsAfter.has(feeId)) {
@@ -922,19 +1110,19 @@ async function handlePayNow() {
       }
     });
 
-    // DO NOT overwrite receipt; this only updates selection area
     calculateTotalFees();
 
-    // update student status locally
     activeStudent.status_id = data.status_id;
     const idx = studentDb.findIndex(s => s.student_id === activeStudent.student_id);
     if (idx !== -1) studentDb[idx].status_id = data.status_id;
 
-    renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment');
+    renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
+
+    uiAlert('Payment processed successfully.', 'success', 'Payment Successful');
 
   } catch (err) {
     console.error(err);
-    alert(err.message || 'Payment failed.');
+    uiAlert(err.message || 'Payment failed.', 'error', 'Payment Failed');
   } finally {
     payBtn.disabled = false;
     payBtn.classList.remove('opacity-60', 'cursor-not-allowed');
@@ -948,19 +1136,20 @@ function issueAndPrint() {
   const currentTid = (tidEl?.innerText || '---').trim();
 
   if (!currentTid || currentTid === '---') {
-    alert('No saved transaction yet. Please click PAY first before printing.');
+    uiAlert('No saved transaction yet. Please click PAY first before printing.', 'warning', 'Print Receipt');
     return;
   }
 
-  // Prefer printing a receipt-only container if you have one.
-  // If not, fallback to receipt-body-template.
   const receiptNode =
     document.getElementById('receipt-paper') ||
     document.getElementById('receipt-body-template');
 
   const receiptHTML = receiptNode?.outerHTML || '';
   const printContainer = document.getElementById('print-container');
-  if (!printContainer) return alert('Print container not found.');
+  if (!printContainer) {
+    uiAlert('Print container not found.', 'error', 'Print Receipt');
+    return;
+  }
 
   printContainer.classList.remove('hidden');
   printContainer.innerHTML = `
@@ -983,26 +1172,63 @@ function issueAndPrint() {
   }, 100);
 }
 
+function clearReceiptMeta() {
+  const recTid = document.getElementById('rec-tid');
+  const recDate = document.getElementById('rec-date');
+  if (recTid) recTid.innerText = '---';
+  if (recDate) recDate.innerText = '---';
+}
+
+function resetLastReceiptSnapshot() {
+  lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
+}
+
+function getPaidFeeIdsForActiveStudent() {
+  const sid = activeStudent?.student_id;
+  return paymentCacheByStudent[sid]?.paidFeeIds || new Set();
+}
+
+function beginNewPaymentSession({ availableFees }) {
+  receiptLocked = false;
+  resetLastReceiptSnapshot();
+  clearReceiptMeta();
+  unlockTotal();
+
+  const paidFeeIds = getPaidFeeIdsForActiveStudent();
+  renderReceiptWithAlreadyPaid({
+    availableFees,
+    paidFeeIdsBefore: paidFeeIds,
+    currentTxnFeeIds: [],
+    controlNumber: null,
+    paymentDate: null
+  });
+}
+
 // ----------------- FILTER STUDENTS -----------------
 window.filterStudents = function filterStudents() {
-  const search = document.getElementById('search-id')?.value.toLowerCase() || '';
+  const search = (document.getElementById('search-id')?.value || '').toLowerCase().trim();
   const status = document.getElementById('filter-status')?.value || 'All';
   const department = document.getElementById('filter-college')?.value || 'All';
 
-  const filtered = studentDb.filter(s => {
-    const studentIdStr = String(s.student_id).toLowerCase();
-    const matchesSearch =
-      studentIdStr.includes(search) ||
-      s.student_firstname.toLowerCase().includes(search) ||
-      s.student_lastname.toLowerCase().includes(search);
+  const filtered = (studentDb || []).filter(s => {
+    const studentIdStr = String(s.student_id ?? '').toLowerCase();
+    const first = String(s.student_firstname ?? '').toLowerCase();
+    const last = String(s.student_lastname ?? '').toLowerCase();
 
-    const matchesStatus = status === 'All' || s.status_id == status;
-    const matchesDept = department === 'All' || s.department_id == department;
+    const matchesSearch =
+      !search ||
+      studentIdStr.includes(search) ||
+      first.includes(search) ||
+      last.includes(search);
+
+    const matchesStatus = status === 'All' || String(s.status_id) === String(status);
+    const matchesDept = department === 'All' || String(s.department_id) === String(department);
 
     return matchesSearch && matchesStatus && matchesDept;
   });
 
-  renderStudentsTable(filtered, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment');
+  renderStudentsTable(filtered, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
+  lucide.createIcons();
 };
 
 // ----------------- EXPORT FUNCTIONS FOR HTML -----------------
@@ -1015,3 +1241,7 @@ window.closePayment = closePayment;
 window.issueAndPrint = issueAndPrint;
 window.handleManualAdd = handleManualAdd;
 window.handlePayNow = handlePayNow;
+window.removeStudent = removeStudent;
+
+// ✅ make sure HTML onclick="requestUpdateTerm()" works:
+window.requestUpdateTerm = window.requestUpdateTerm;

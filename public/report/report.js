@@ -97,6 +97,65 @@ function normalizeTransactions(rows) {
   }));
 }
 
+// ===================== REPORT SEARCH (NEW) =====================
+// This filters CURRENT table rows only (client-side).
+// It searches: Reference ID, Student ID, Student Name, Allocated Fees, Status
+window.filterReportTable = function filterReportTable() {
+  const input = document.getElementById("report-search");
+  const q = (input?.value || "").toLowerCase().trim();
+
+  // If no data loaded yet, do nothing
+  if (!Array.isArray(currentReportData)) return;
+
+  const filtered = !q
+    ? currentReportData
+    : currentReportData.filter(t => {
+        const hay = [
+          t.id,
+          t.studentId,
+          t.student,
+          t.fee,
+          t.status
+        ].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+
+  // Re-render table only (stats remain based on full report period)
+  const tbody = document.getElementById("transaction-table-body");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="py-12 text-center text-slate-400 text-sm italic">
+          No matching transactions.
+        </td>
+      </tr>
+    `;
+  } else {
+    filtered.forEach(txn => {
+      tbody.innerHTML += `
+        <tr class="hover:bg-slate-50/50">
+          <td class="px-6 py-4 font-mono text-[10px] text-blue-600 font-bold">${txn.id}</td>
+          <td class="px-6 py-4 font-mono text-[10px] text-slate-500 font-bold">${txn.studentId}</td>
+          <td class="px-6 py-4 font-bold text-slate-800">${txn.student}</td>
+          <td class="px-6 py-4 text-[11px] font-medium text-slate-500">${txn.fee}</td>
+          <td class="px-6 py-4 font-bold text-slate-900 text-right">
+            ${Number(txn.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </td>
+          <td class="px-6 py-4 text-center">
+            <span class="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded">${txn.status}</span>
+          </td>
+        </tr>
+      `;
+    });
+  }
+
+  lucide.createIcons();
+};
+
 // ===================== MAIN REPORT =====================
 async function generateReport() {
   const range = document.getElementById("report-range").value;
@@ -141,8 +200,16 @@ async function generateReport() {
 
     currentReportData = normalizeTransactions(api.transactions);
 
+    // UI labels + show controls
     document.getElementById("log-date-display").innerText = `Period: ${selection.toUpperCase()}`;
-    document.getElementById("download-btn").classList.remove("hidden");
+
+    // ✅ show export + search bar (added in HTML)
+    document.getElementById("download-btn")?.classList.remove("hidden");
+    document.getElementById("report-search-wrap")?.classList.remove("hidden");
+
+    // ✅ clear search each time you compile
+    const searchInput = document.getElementById("report-search");
+    if (searchInput) searchInput.value = "";
 
     // ---- render table ----
     const tbody = document.getElementById("transaction-table-body");
@@ -224,7 +291,8 @@ async function generateReport() {
   } catch (e) {
     console.error(e);
     alert(e?.message || "Failed to compile report.");
-    document.getElementById("download-btn").classList.add("hidden");
+    document.getElementById("download-btn")?.classList.add("hidden");
+    document.getElementById("report-search-wrap")?.classList.add("hidden");
   }
 }
 
@@ -485,6 +553,10 @@ function handleLogout() {
 
 window.onload = () => {
   lucide.createIcons();
+
+  // make sure search bar starts hidden/clean (it will show after compile)
+  const searchInput = document.getElementById("report-search");
+  if (searchInput) searchInput.value = "";
 };
 
 // --- Sidebar State ---
