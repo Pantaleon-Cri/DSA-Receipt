@@ -1,23 +1,53 @@
-//the import excel is here and the text
-const user = JSON.parse(localStorage.getItem('loggedUser'));
-document.getElementById('user-role').textContent = `${user.user_firstName} ${user.user_lastName}`;
-window.addEventListener('DOMContentLoaded', loadActiveTerm);
+// routes/term (log_user.js)
+
+// --------- SAFE USER NAME SETUP ----------
+window.addEventListener("DOMContentLoaded", () => {
+  try {
+    const userRaw = localStorage.getItem("loggedUser");
+    const user = userRaw ? JSON.parse(userRaw) : null;
+
+    const userRoleEl = document.getElementById("user-role");
+    if (userRoleEl && user) {
+      const first = user.user_firstName ?? "";
+      const last = user.user_lastName ?? "";
+      const name = `${first} ${last}`.trim();
+      userRoleEl.textContent = name || "USER";
+    }
+  } catch (e) {
+    console.error("Failed to load user from localStorage:", e);
+  }
+
+  loadActiveTerm(); // keep your behavior
+});
+
+// --------- ACTIVE TERM ----------
 function loadActiveTerm() {
-  fetch('http://localhost:3000/api/term/active')
-    .then(res => res.json())
-    .then(data => {
+  fetch("http://localhost:3000/api/term/active")
+    .then((res) => res.json())
+    .then((data) => {
+      // IMPORTANT: some pages don't have #active-term
+      const activeTermEl = document.getElementById("active-term");
+      if (!activeTermEl) return; // ✅ prevent crash
+
       if (data.success) {
-        document.getElementById('active-term').textContent = `${data.semester} ${data.year}`;
+        // your API returns year/semester_id; you are displaying semester+year
+        const semLabel = data.semester || data.semester_name || "Semester";
+        const yearLabel = data.year || data.year_name || "Year";
+        activeTermEl.textContent = `${semLabel} ${yearLabel}`;
       } else {
-        document.getElementById('active-term').textContent = 'No active term';
+        activeTermEl.textContent = "No active term";
       }
     })
-    .catch(err => {
-      console.error('Failed to load active term:', err);
-      document.getElementById('active-term').textContent = 'Error loading term';
+    .catch((err) => {
+      console.error("Failed to load active term:", err);
+      const activeTermEl = document.getElementById("active-term");
+      if (activeTermEl) activeTermEl.textContent = "Error loading term";
     });
 }
 
+// =====================================================
+// EXCEL IMPORT (your code, unchanged except kept safe)
+// =====================================================
 function simulateExcelUpload(event) {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -31,7 +61,6 @@ function simulateExcelUpload(event) {
         subtitle,
         message: String(message ?? "")
       });
-      // ensure lucide icons render inside modal
       try { window.lucide?.createIcons?.(); } catch (_) {}
     } else {
       alert(String(message ?? ""));
@@ -59,7 +88,6 @@ function simulateExcelUpload(event) {
           resolve(val);
         };
 
-        // open modal
         window.openConfirm({
           title,
           subtitle,
@@ -70,7 +98,6 @@ function simulateExcelUpload(event) {
           onConfirm: () => done(true)
         });
 
-        // If they cancel/close, resolve false (best-effort)
         const originalClose = window.closeConfirm;
         if (typeof originalClose === "function") {
           window.closeConfirm = function () {
@@ -81,34 +108,25 @@ function simulateExcelUpload(event) {
           };
         }
 
-        // ensure lucide icons render inside confirm modal
         try { window.lucide?.createIcons?.(); } catch (_) {}
       });
     }
 
-    // fallback
     return Promise.resolve(confirm(message));
   };
 
-  /**
-   * Show the import summary modal if available (modal-import-result),
-   * otherwise fall back to alert()
-   */
   const showImportResult = (uploaded, skippedDuplicates, skippedInvalid = 0) => {
-    // If you implemented a dedicated function, use it
     if (typeof window.showImportResult === "function") {
       window.showImportResult(uploaded, skippedDuplicates, skippedInvalid);
       return;
     }
 
-    // If you have the HTML modal-import-result, fill it and show it
     const modal = document.getElementById("modal-import-result");
     const upEl = document.getElementById("import-uploaded");
     const skEl = document.getElementById("import-skipped");
 
     if (modal && upEl && skEl) {
       upEl.textContent = String(uploaded ?? 0);
-      // This "skipped" is for duplicates only (matches your UI label)
       skEl.textContent = String(skippedDuplicates ?? 0);
 
       modal.classList.remove("hidden");
@@ -116,7 +134,6 @@ function simulateExcelUpload(event) {
       return;
     }
 
-    // final fallback
     uiAlert(
       `Import Summary:\nUploaded: ${uploaded}\nSkipped (Duplicates): ${skippedDuplicates}\nSkipped (Invalid Rows): ${skippedInvalid}`,
       "success",
@@ -135,7 +152,6 @@ function simulateExcelUpload(event) {
     return;
   }
 
-  // ---------- READ FILE ----------
   const reader = new FileReader();
 
   reader.onload = async function (e) {
@@ -166,7 +182,6 @@ function simulateExcelUpload(event) {
         return;
       }
 
-      // ---------- VALIDATE REQUIRED COLUMNS ----------
       const requiredCols = ["student_id", "student_firstname", "student_lastname", "department_id"];
       const headerKeys = Object.keys(rows[0] || {});
       const missingCols = requiredCols.filter(c => !headerKeys.includes(c));
@@ -180,12 +195,10 @@ function simulateExcelUpload(event) {
         return;
       }
 
-      // ---------- MAP ROWS ----------
       const mapped = [];
       let invalidSkipped = 0;
 
       rows.forEach((r, idx) => {
-        // keep student_id as string (supports "2025-0001")
         const sid = String(r.student_id ?? "").trim();
         const dept = parseInt(r.department_id, 10);
 
@@ -212,7 +225,6 @@ function simulateExcelUpload(event) {
         return;
       }
 
-      // ---------- ✅ CONFIRM BEFORE UPLOAD (your requested message) ----------
       const ok = await uiConfirm({
         title: "Confirm Upload",
         subtitle: "Please review before uploading.",
@@ -225,21 +237,15 @@ function simulateExcelUpload(event) {
 
       if (!ok) return;
 
-      // ---------- SEND TO BACKEND ----------
       const res = await fetch("/api/students/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ students: mapped })
       });
 
-      // handle 200/400 returning JSON or text
       const text = await res.text();
       let out;
-      try {
-        out = text ? JSON.parse(text) : null;
-      } catch (_) {
-        out = null;
-      }
+      try { out = text ? JSON.parse(text) : null; } catch (_) { out = null; }
 
       if (!out || typeof out !== "object") {
         uiAlert(
@@ -255,16 +261,11 @@ function simulateExcelUpload(event) {
         return;
       }
 
-      // ---------- SHOW SUMMARY (uploaded vs duplicated) ----------
-      // Expect backend response like:
-      // { success:true, uploaded:X, skipped:Y, message:"..." }
       const uploaded = Number(out.uploaded ?? 0);
       const skippedDup = Number(out.skipped ?? out.skipped_duplicates ?? 0);
 
       showImportResult(uploaded, skippedDup, invalidSkipped);
 
-      // ---------- REFRESH LIST ----------
-      // If student.js exposes loadStudents to window, use it
       if (typeof window.loadStudents === "function") {
         await window.loadStudents();
       }
@@ -280,14 +281,7 @@ function simulateExcelUpload(event) {
   };
 
   reader.readAsArrayBuffer(file);
-
-  // Reset file input so user can upload the same file again
   event.target.value = "";
 }
 
-// ✅ Make it available for inline onchange="simulateExcelUpload(event)"
 window.simulateExcelUpload = simulateExcelUpload;
-
-
-
-

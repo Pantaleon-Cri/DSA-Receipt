@@ -38,6 +38,11 @@ const API = {
   dashboard: '/api/dashboard'
 };
 
+// ---------- Export cache for modal (Show All) ----------
+// This array will always reflect EXACTLY what Show All modal is showing.
+window.__CURRENT_MODAL_ROWS = [];
+window.getCurrentModalRows = () => window.__CURRENT_MODAL_ROWS;
+
 // ---------- Utilities ----------
 function escapeHtml(str) {
   return String(str ?? '')
@@ -105,7 +110,6 @@ function getSemestersForYear(yearId) {
 // Choose the best semester for the currently selected year
 function chooseDefaultSemesterForYear(yearId) {
   const list = getSemestersForYear(yearId);
-
   if (!list.length) return null;
 
   // 1) If active term semester belongs to this year, use it
@@ -293,7 +297,7 @@ function buildSemesterSelect() {
     sel.value = String(selectedSemesterId);
   }
 
-  // Optional: ensure change updates state + dashboard (HTML onchange also calls updateDashboard)
+  // Ensure change updates state + dashboard
   sel.onchange = () => {
     selectedSemesterId = sel.value;
     updateDashboard();
@@ -400,7 +404,6 @@ async function updateDashboard() {
       fetchJSON(`${API.dashboard}?${qsFiltered.toString()}`)
     ]);
 
-    // If unfiltered fails, fallback everything to empty
     if (!respAll?.success) {
       console.error('Dashboard API (unfiltered) error:', respAll?.message);
       buildStatusCards({});
@@ -409,7 +412,6 @@ async function updateDashboard() {
       return;
     }
 
-    // Use unfiltered stats for cards + chart
     const studentsAll = Array.isArray(respAll.students) ? respAll.students : [];
     const byStatusAll = respAll.stats?.byStatus || {};
     const totalAll = Number(respAll.stats?.total ?? studentsAll.length ?? 0);
@@ -431,7 +433,6 @@ async function updateDashboard() {
 
     renderChart(paidCountAll, otherCountAll, paidLikeId);
 
-    // Use filtered response ONLY for the preview table
     if (!respFiltered?.success) {
       console.error('Dashboard API (filtered) error:', respFiltered?.message);
       renderTable([]);
@@ -482,7 +483,7 @@ function renderTable(data) {
 }
 
 // ============================================
-// Chart (Paid = GREEN, Other = RED-ish gray)
+// Chart (Paid = GREEN, Other = RED-ish)
 // ============================================
 function renderChart(paidCount, otherCount, paidLikeId) {
   const canvas = document.getElementById('paymentChart');
@@ -499,7 +500,6 @@ function renderChart(paidCount, otherCount, paidLikeId) {
     data: {
       datasets: [{
         data: [paidCount, otherCount],
-        // Paid slice GREEN, remaining slice LIGHT RED/GRAY
         backgroundColor: ['#16a34a', '#fee2e2'],
         borderWidth: 0,
         cutout: '82%'
@@ -520,7 +520,6 @@ function renderChart(paidCount, otherCount, paidLikeId) {
       },
       onClick: (_, el) => {
         if (!el.length) return;
-        // click green slice filters Paid status, click other clears filter
         if (el[0].index === 0 && paidLikeId) {
           filterListByStatusId(paidLikeId);
         } else {
@@ -546,7 +545,7 @@ function renderChart(paidCount, otherCount, paidLikeId) {
 }
 
 // ============================================
-// Modal (Show All)
+// Modal (Show All) + EXPORT CACHE
 // ============================================
 async function openFullListModal() {
   try {
@@ -569,6 +568,19 @@ async function openFullListModal() {
     if (!tbody) return;
 
     const students = resp?.success && Array.isArray(resp.students) ? resp.students : [];
+
+    // ✅ IMPORTANT: cache EXACT rows shown in modal for Export Excel
+    window.__CURRENT_MODAL_ROWS = students.map(s => {
+      const fullName = `${s.student_firstname ?? ''} ${s.student_lastname ?? ''}`.trim() || '—';
+      const dept = s.department_abbr || s.department_name || getDeptLabelById(s.department_id);
+      const statusName = titleCase(s.status_name || getStatusLabelById(s.status_id));
+      return {
+        id: s.student_id ?? '—',
+        name: fullName,
+        college: dept,
+        status: statusName
+      };
+    });
 
     tbody.innerHTML = students.map(s => {
       const fullName = `${s.student_firstname ?? ''} ${s.student_lastname ?? ''}`.trim() || '—';
@@ -595,6 +607,10 @@ async function openFullListModal() {
 
   } catch (err) {
     console.error(err);
+
+    // even on error, ensure cache is cleared to avoid exporting stale data
+    window.__CURRENT_MODAL_ROWS = [];
+
     const modal = document.getElementById('full-list-modal');
     if (modal) modal.classList.remove('hidden');
   }
@@ -652,13 +668,56 @@ async function loadReferenceData() {
   buildDepartmentButtons();
   lucide.createIcons();
 }
+// ============================================
+// Export Excel (GLOBAL) - used by modal button
+// Requires SheetJS loaded in dashboard.html
+// ============================================
+window.exportCurrentExcel = function exportCurrentExcel() {
+  try {
+    if (typeof XLSX === "undefined") {
+      alert("SheetJS (XLSX) is not loaded. Please include the XLSX script.");
+      return;
+    }
+
+    const rows =
+      (typeof window.getCurrentModalRows === "function" && window.getCurrentModalRows()) ||
+      window.__CURRENT_MODAL_ROWS ||
+      [];
+
+    if (!rows.length) {
+      alert("No records to export for the current selection.");
+      return;
+    }
+
+    const exportData = rows.map(r => ({
+      "ID": r.id ?? "",
+      "Name": r.name ?? "",
+      "College": r.college ?? "",
+      "Status": r.status ?? ""
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Student Records");
+
+    const subtitle = (document.getElementById("modal-subtitle")?.textContent || "").trim();
+    const safeSubtitle = subtitle
+      ? subtitle.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim()
+      : "Selection";
+
+    XLSX.writeFile(wb, `Student_Records_${safeSubtitle}.xlsx`);
+  } catch (e) {
+    console.error("Export failed:", e);
+    alert("Export failed. Check console for details.");
+  }
+};
+
 
 // ============================================
 // Close year dropdown when clicking outside
 // ============================================
 window.onclick = (e) => {
-  // Keep your logic, but make sure it doesn't accidentally close when clicking inside dropdown controls
-  // The dropdown container is inside the ".relative" wrapper in your HTML.
+  // Close year dropdown only when clicking outside the year control wrapper
   if (!e.target.closest('.relative')) {
     const dd = document.getElementById('year-dropdown');
     if (dd) dd.classList.remove('show');
