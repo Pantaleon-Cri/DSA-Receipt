@@ -40,52 +40,6 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/users', usersRouter);
 
 app.use('/api/roles', rolesRouter);
-// server.js (or your route handler)
-app.post('/api/students/import', async (req, res) => {
-    try {
-        const { students } = req.body;
-
-        if (!students || !Array.isArray(students) || students.length === 0) {
-            return res.json({ success: false, message: 'No students provided' });
-        }
-
-        // Map to array of arrays for bulk insert
-        const values = students.map(s => [
-            s.student_id,
-            s.student_firstname,
-            s.student_lastname,
-            s.department_id,
-            s.course_id || null,
-            s.year_semester_id,      // active semester id
-            s.status_id || 1,        // default status
-            s.is_officer !== undefined ? s.is_officer : null
-        ]);
-
-        // Insert ignoring duplicates
-        const insertSql = `
-            INSERT IGNORE INTO student
-            (student_id, student_firstname, student_lastname, department_id, course_id, year_semester_id, status_id, is_officer)
-            VALUES ?
-        `;
-        const [insertResult] = await db.promise().query(insertSql, [values]);
-
-        // Fetch the updated list of students for the active semester
-        const [studentsList] = await db.promise().query(
-            `SELECT * FROM student WHERE year_semester_id = ? ORDER BY student_id`,
-            [students[0].year_semester_id]
-        );
-
-        res.json({ 
-            success: true, 
-            message: `${insertResult.affectedRows} student(s) imported. Duplicates were skipped.`,
-            students: studentsList   // ✅ send updated students back
-        });
-
-    } catch (err) {
-        console.error('Error importing students:', err);
-        res.json({ success: false, message: 'Failed to import students', error: err.message });
-    }
-});
 
 
 

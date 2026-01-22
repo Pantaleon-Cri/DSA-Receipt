@@ -8,18 +8,18 @@ import {
   addStudent,
   toggleOfficerStatus,
   updateTerm
-} from './api.js';
+} from "./api.js";
 
-import { renderStudentsTable, renderDepartments } from './render.js';
-import { calculateTotalFees, toggleSidebar, lockTotal, unlockTotal } from './utils.js';
+import { renderStudentsTable, renderDepartments } from "./render.js";
+import { calculateTotalFees, toggleSidebar, lockTotal, unlockTotal } from "./utils.js";
 
 // ----------------- GLOBAL VARIABLES -----------------
 let studentDb = [];
 let departmentMap = {};
 let statusMap = {};
 window.CURRENT_YEAR_SEMESTER_ID = null;
-let activeStudent = null;
 
+let activeStudent = null;
 let feesDb = []; // store fees globally
 
 // Cache (optional)
@@ -37,38 +37,60 @@ let lastReceipt = {
 };
 
 // UI mode (prevents PAY/PRINT overlapping with reprint controls)
-let receiptMode = 'PAY'; // 'PAY' | 'REPRINT'
+let receiptMode = "PAY"; // 'PAY' | 'REPRINT'
 
 // ----------------- MODAL-FIRST HELPERS (NO BROWSER DEFAULT) -----------------
 function hasModalAlert() {
-  return typeof window.openAlert === 'function';
-}
-function hasModalConfirm() {
-  return typeof window.openConfirm === 'function';
+  return typeof window.openAlert === "function";
 }
 
-function uiAlert(message, type = 'info', title = 'Notice', subtitle = '') {
+function hasModalConfirm() {
+  return typeof window.openConfirm === "function";
+}
+
+function uiAlert(message, type = "info", title = "Notice", subtitle = "") {
   if (hasModalAlert()) {
-    window.openAlert({ type, title, subtitle, message: String(message ?? '') });
+    window.openAlert({ type, title, subtitle, message: String(message ?? "") });
   } else {
-    alert(String(message ?? ''));
+    alert(String(message ?? ""));
   }
 }
 
 /**
- * Promise-based confirm. Uses Tailwind confirm modal if available.
- * @returns {Promise<boolean>}
+ * Promise-based confirm.
+ * Supports two modal implementations:
+ * 1) openConfirm returns Promise<boolean>  ✅ (recommended)
+ * 2) openConfirm uses callback onConfirm + closeConfirm  (legacy)
  */
 function uiConfirm({
-  title = 'Confirm',
-  subtitle = 'Please confirm your action.',
-  message = 'Are you sure you want to continue?',
-  okText = 'Yes, Continue',
-  okClass = 'bg-slate-900 hover:bg-slate-800',
-  cancelText = 'Cancel'
+  title = "Confirm",
+  subtitle = "Please confirm your action.",
+  message = "Are you sure you want to continue?",
+  okText = "Yes, Continue",
+  okClass = "bg-slate-900 hover:bg-slate-800",
+  cancelText = "Cancel"
 } = {}) {
   if (hasModalConfirm()) {
-    return new Promise(resolve => {
+    // ✅ If your openConfirm already returns a promise, use it
+    try {
+      const maybePromise = window.openConfirm({
+        title,
+        subtitle,
+        message,
+        okText,
+        okClass,
+        cancelText
+      });
+
+      if (maybePromise && typeof maybePromise.then === "function") {
+        return maybePromise;
+      }
+    } catch (e) {
+      console.warn("openConfirm threw, falling back to legacy wrapper:", e);
+    }
+
+    // ✅ Legacy wrapper (onConfirm + closeConfirm override)
+    return new Promise((resolve) => {
       window.openConfirm({
         title,
         subtitle,
@@ -80,7 +102,7 @@ function uiConfirm({
       });
 
       const originalClose = window.closeConfirm;
-      if (typeof originalClose === 'function') {
+      if (typeof originalClose === "function") {
         window.closeConfirm = function () {
           try {
             originalClose();
@@ -98,8 +120,7 @@ function uiConfirm({
 
 // ----------------- HELPERS -----------------
 function getStudentRoleString(student) {
-  // officer => "1", non-officer => "0"
-  return student?.is_officer ? '1' : '0';
+  return student?.is_officer ? "1" : "0";
 }
 
 function money(n) {
@@ -109,121 +130,63 @@ function money(n) {
 
 // ----------------- UI HELPERS (no-overlap controls) -----------------
 function setReceiptMode(mode) {
-  receiptMode = mode === 'REPRINT' ? 'REPRINT' : 'PAY';
+  receiptMode = mode === "REPRINT" ? "REPRINT" : "PAY";
 
-  const payBtn = document.getElementById('btn-pay-now');
-  const feesContainer = document.getElementById('fees-container');
+  const payBtn = document.getElementById("btn-pay-now");
+  const feesContainer = document.getElementById("fees-container");
 
   if (payBtn) {
-    if (receiptMode === 'REPRINT') payBtn.classList.add('hidden');
-    else payBtn.classList.remove('hidden');
+    if (receiptMode === "REPRINT") payBtn.classList.add("hidden");
+    else payBtn.classList.remove("hidden");
   }
 
   if (feesContainer) {
-    if (receiptMode === 'REPRINT') feesContainer.classList.add('pointer-events-none', 'opacity-70');
-    else feesContainer.classList.remove('pointer-events-none', 'opacity-70');
+    if (receiptMode === "REPRINT") feesContainer.classList.add("pointer-events-none", "opacity-70");
+    else feesContainer.classList.remove("pointer-events-none", "opacity-70");
   }
 
-  const actions = document.getElementById('receipt-actions') || document.getElementById('payment-actions');
-  if (actions) actions.classList.add('flex', 'flex-wrap', 'gap-2', 'items-center');
+  const actions = document.getElementById("receipt-actions") || document.getElementById("payment-actions");
+  if (actions) actions.classList.add("flex", "flex-wrap", "gap-2", "items-center");
 
-  const reprintWrap = document.getElementById('reprint-wrap');
-  if (reprintWrap) reprintWrap.classList.add('w-full');
+  const reprintWrap = document.getElementById("reprint-wrap");
+  if (reprintWrap) reprintWrap.classList.add("w-full");
 }
 
 function resetReprintUI() {
-  const sel = document.getElementById('reprint-select');
-  if (sel) sel.value = '';
-  setReceiptMode('PAY');
+  const sel = document.getElementById("reprint-select");
+  if (sel) sel.value = "";
+  setReceiptMode("PAY");
 }
 
 function setupReprintControls() {
-  const sel = document.getElementById('reprint-select');
+  const sel = document.getElementById("reprint-select");
   if (sel && !sel.dataset.bound) {
-    sel.addEventListener('change', () => {
+    sel.addEventListener("change", () => {
       if (sel.value) {
-        setReceiptMode('REPRINT');
+        setReceiptMode("REPRINT");
       } else {
         receiptLocked = false;
         unlockTotal();
-        setReceiptMode('PAY');
+        setReceiptMode("PAY");
       }
     });
-    sel.dataset.bound = '1';
+    sel.dataset.bound = "1";
   }
-}
-
-// ----------------- ✅ STRICT ACTIVE TERM RESOLVER (FIX) -----------------
-// If your backend sometimes returns wrong /active due to DB inconsistency,
-// this resolver deterministically finds the active year then active semester inside it.
-async function fetchActiveTermStrict() {
-  // 1) find active year
-  const yRes = await fetch('http://localhost:3000/api/term/years');
-  const yData = await yRes.json();
-  if (!yData?.success || !Array.isArray(yData.years)) {
-    return { success: false, message: 'Failed to load years' };
-  }
-
-  const activeYear = yData.years.find(y => !!y.is_active);
-  if (!activeYear) {
-    return { success: false, message: 'No active year found' };
-  }
-
-  // 2) find active semester inside that year
-  const sRes = await fetch(
-    `http://localhost:3000/api/term/semesters?year_id=${encodeURIComponent(activeYear.year_id)}`
-  );
-  const sData = await sRes.json();
-  if (!sData?.success || !Array.isArray(sData.semesters)) {
-    return { success: false, message: 'Failed to load semesters for active year' };
-  }
-
-  const activeSem = sData.semesters.find(s => !!s.is_active);
-  if (!activeSem) {
-    return { success: false, message: 'No active semester found in active year' };
-  }
-
-  // optional: student population
-  let student_population = 0;
-  try {
-    const aRes = await fetch('http://localhost:3000/api/term/active');
-    const aData = await aRes.json();
-    if (aData?.success && Number.isFinite(Number(aData.student_population))) {
-      student_population = Number(aData.student_population);
-    }
-  } catch {}
-
-  return {
-    success: true,
-    year_id: activeYear.year_id,
-    year: activeYear.year_name,
-    semester_id: activeSem.semester_id,
-    semester: activeSem.semester_name,
-    student_population
-  };
 }
 
 // ----------------- TERM / SEMESTER UPDATE -----------------
 window.requestUpdateTerm = async function requestUpdateTerm() {
-  const yearInput = document.getElementById('input-ay')?.value.trim();
-  const semInput = document.getElementById('input-sem-manual')?.value.trim();
+  const yearInput = document.getElementById("input-ay")?.value.trim();
+  const semInput = document.getElementById("input-sem-manual")?.value.trim();
 
-  const yearSelect = document.getElementById('select-year');
-  const semSelect = document.getElementById('select-sem');
+  const yearSelect = document.getElementById("select-year");
+  const semSelect = document.getElementById("select-sem");
 
-  // NOTE:
-  // - Backend /term/update expects NAMES (your current routes use year_name & semester_name)
-  // - Dropdown option textContent is the name, option.value is the id.
-  const yearName =
-    yearInput ||
-    yearSelect?.selectedOptions?.[0]?.textContent?.trim();
-
-  const semName =
-    semInput ||
-    semSelect?.selectedOptions?.[0]?.textContent?.trim();
+  const yearName = yearInput || yearSelect?.selectedOptions?.[0]?.textContent?.trim();
+  const semName = semInput || semSelect?.selectedOptions?.[0]?.textContent?.trim();
 
   if (!yearName || !semName) {
-    uiAlert('Please select or enter both Academic Year and Semester.', 'warning', 'Missing Fields');
+    uiAlert("Please select or enter both Academic Year and Semester.", "warning", "Missing Fields");
     return;
   }
 
@@ -231,47 +194,30 @@ window.requestUpdateTerm = async function requestUpdateTerm() {
     const data = await updateTerm({ year: yearName, semester: semName });
 
     if (!data.success) {
-      uiAlert(data.message || 'Failed to update term.', 'error', 'Update Failed');
+      uiAlert(data.message || "Failed to update term.", "error", "Update Failed");
       return;
     }
 
-    uiAlert('Term updated successfully!', 'success', 'Updated');
+    uiAlert("Term updated successfully!", "success", "Updated");
 
     // clear manual inputs
-    const ay = document.getElementById('input-ay');
-    const sm = document.getElementById('input-sem-manual');
-    if (ay) ay.value = '';
-    if (sm) sm.value = '';
-
-    // IMPORTANT: clear selection + caches when switching term
-    try {
-      closePayment();
-    } catch {}
-    activeStudent = null;
-    for (const k of Object.keys(paymentCacheByStudent)) delete paymentCacheByStudent[k];
-    receiptLocked = false;
-    resetLastReceiptSnapshot();
-    clearReceiptMeta();
-    resetReprintUI();
+    const ay = document.getElementById("input-ay");
+    const sm = document.getElementById("input-sem-manual");
+    if (ay) ay.value = "";
+    if (sm) sm.value = "";
 
     // refresh active term label (and CURRENT_YEAR_SEMESTER_ID)
     await loadActiveTerm();
 
     // refresh dropdowns to reflect active
     try {
-      const strict = await fetchActiveTermStrict();
-      if (strict?.success) {
-        await populateYearDropdown(strict.year_id);
-        await populateSemesterDropdown(strict.year_id, strict.semester_id);
+      const active = await fetchActiveTerm();
+      if (active?.success) {
+        await populateYearDropdown(active.year_id);
+        await populateSemesterDropdown(active.year_id, active.semester_id);
       } else {
-        const active = await fetchActiveTerm();
-        if (active?.success) {
-          await populateYearDropdown(active.year_id);
-          await populateSemesterDropdown(active.year_id, active.semester_id);
-        } else {
-          await populateYearDropdown();
-          await populateSemesterDropdown();
-        }
+        await populateYearDropdown();
+        await populateSemesterDropdown();
       }
     } catch {
       await populateYearDropdown();
@@ -282,15 +228,15 @@ window.requestUpdateTerm = async function requestUpdateTerm() {
     await loadStudents();
 
     // close modal
-    toggleModal('modal-semester');
+    toggleModal("modal-semester");
   } catch (err) {
-    console.error('Failed to update term:', err);
-    uiAlert('Failed to update term: ' + (err.message || String(err)), 'error', 'Update Failed');
+    console.error("Failed to update term:", err);
+    uiAlert("Failed to update term: " + (err.message || String(err)), "error", "Update Failed");
   }
 };
 
 // ----------------- INIT -----------------
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener("DOMContentLoaded", async () => {
   lucide.createIcons();
 
   await loadActiveTerm();
@@ -302,73 +248,72 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupPayButton();
   setupReprintControls();
 
-  document.getElementById('select-department')?.addEventListener('change', e => loadCourses(e.target.value));
-  const addStudentForm = document.getElementById('form-add-student');
-  if (addStudentForm) addStudentForm.addEventListener('submit', handleManualAdd);
+  document.getElementById("select-department")?.addEventListener("change", (e) => loadCourses(e.target.value));
 
-  // Optional: if you have a "Reprint" button in HTML
-  const btnReprint = document.getElementById('btn-reprint-receipt');
-  if (btnReprint && !btnReprint.dataset.bound) {
-    btnReprint.addEventListener('click', handleReprintReceipt);
-    btnReprint.dataset.bound = '1';
-  }
+  const addStudentForm = document.getElementById("form-add-student");
+  if (addStudentForm) addStudentForm.addEventListener("submit", handleManualAdd);
 });
 
-// ----------------- REPRINT HELPERS (require backend routes) -----------------
+// ----------------- REPRINT HELPERS -----------------
 async function fetchStudentTransactions(student_id) {
   const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
-  const url = Number.isFinite(termId) && termId > 0
-    ? `http://localhost:3000/api/payments/student/${student_id}/transactions?semester_id=${termId}`
-    : `http://localhost:3000/api/payments/student/${student_id}/transactions`;
+  const url =
+    Number.isFinite(termId) && termId > 0
+      ? `http://localhost:3000/api/payments/student/${student_id}/transactions?semester_id=${termId}`
+      : `http://localhost:3000/api/payments/student/${student_id}/transactions`;
 
   const res = await fetch(url);
   const text = await res.text();
+
   let data;
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error(`Transactions route not returning JSON (HTTP ${res.status}).`);
   }
-  if (!res.ok || !data.success) throw new Error(data.message || 'Failed to fetch transactions');
+
+  if (!res.ok || !data.success) throw new Error(data.message || "Failed to fetch transactions");
   return data.transactions || [];
 }
 
 async function fetchReceiptByControlNumber(controlNumber) {
   const res = await fetch(`http://localhost:3000/api/payments/receipt/${encodeURIComponent(controlNumber)}`);
   const text = await res.text();
+
   let data;
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error(`Receipt route not returning JSON (HTTP ${res.status}).`);
   }
-  if (!res.ok || !data.success) throw new Error(data.message || 'Failed to fetch receipt');
+
+  if (!res.ok || !data.success) throw new Error(data.message || "Failed to fetch receipt");
   return data.receipt;
 }
 
 function renderReceiptFromDbReceipt(receipt) {
-  const tidEl = document.getElementById('rec-tid');
-  const dateEl = document.getElementById('rec-date');
-  const issuerEl = document.getElementById('rec-issuer-name');
-  const listEl = document.getElementById('rec-fees-list');
-  const totalEl = document.getElementById('rec-total');
+  const tidEl = document.getElementById("rec-tid");
+  const dateEl = document.getElementById("rec-date");
+  const issuerEl = document.getElementById("rec-issuer-name");
+  const listEl = document.getElementById("rec-fees-list");
+  const totalEl = document.getElementById("rec-total");
 
   if (!tidEl || !dateEl || !issuerEl || !listEl || !totalEl) return;
 
-  tidEl.innerText = receipt.control_number || '---';
+  tidEl.innerText = receipt.control_number || "---";
   dateEl.innerText = receipt.payment_date
-    ? new Date(receipt.payment_date).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+    ? new Date(receipt.payment_date).toLocaleString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
       })
-    : '---';
-  issuerEl.innerText = receipt.issued_by || 'Cashier';
+    : "---";
+  issuerEl.innerText = receipt.issued_by || "Cashier";
 
   listEl.innerHTML = (receipt.items || [])
-    .map(it => {
+    .map((it) => {
       const amt = Number(it.amount_paid || 0);
       return `
         <div class="flex justify-between">
@@ -377,21 +322,21 @@ function renderReceiptFromDbReceipt(receipt) {
         </div>
       `;
     })
-    .join('');
+    .join("");
 
   const total = Number(receipt.total_amount || 0);
-  totalEl.innerText = '₱' + money(total);
+  totalEl.innerText = "₱" + money(total);
 }
 
 async function handleReprintReceipt() {
-  if (!activeStudent) return uiAlert('No student selected.', 'warning', 'Reprint');
+  if (!activeStudent) return uiAlert("No student selected.", "warning", "Reprint");
 
-  const sel = document.getElementById('reprint-select');
+  const sel = document.getElementById("reprint-select");
   const cn = sel?.value;
-  if (!cn) return uiAlert('Please select a receipt to reprint.', 'warning', 'Reprint');
+  if (!cn) return uiAlert("Please select a receipt to reprint.", "warning", "Reprint");
 
   try {
-    setReceiptMode('REPRINT');
+    setReceiptMode("REPRINT");
     lockTotal();
     receiptLocked = true;
 
@@ -399,33 +344,33 @@ async function handleReprintReceipt() {
     renderReceiptFromDbReceipt(receipt);
   } catch (err) {
     console.error(err);
-    uiAlert(err.message || 'Failed to reprint receipt.', 'error', 'Reprint Failed');
+    uiAlert(err.message || "Failed to reprint receipt.", "error", "Reprint Failed");
   }
 }
 window.handleReprintReceipt = handleReprintReceipt;
 
-// ----------------- REMOVE STUDENT (SOFT DELETE) -----------------
+// ----------------- REMOVE STUDENT -----------------
 async function removeStudent(studentId) {
-  const student = (studentDb || []).find(s => String(s.student_id) === String(studentId));
+  const student = (studentDb || []).find((s) => String(s.student_id) === String(studentId));
 
   if (student && Number(student.status_id) === 2) {
-    uiAlert('Cannot delete this student because the status is PAID.', 'warning', 'Delete Blocked');
+    uiAlert("Cannot delete this student because the status is PAID.", "warning", "Delete Blocked");
     return;
   }
 
   const ok = await uiConfirm({
-    title: 'Delete Student',
-    subtitle: 'This will perform a soft delete.',
+    title: "Delete Student",
+    subtitle: "This will perform a soft delete.",
     message: `Delete/Remove student ${studentId}?`,
-    okText: 'Yes, Delete',
-    okClass: 'bg-red-600 hover:bg-red-700'
+    okText: "Yes, Delete",
+    okClass: "bg-red-600 hover:bg-red-700"
   });
   if (!ok) return;
 
   try {
-    const res = await fetch('http://localhost:3000/api/students/remove', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("http://localhost:3000/api/students/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ student_id: studentId })
     });
 
@@ -437,70 +382,59 @@ async function removeStudent(studentId) {
       throw new Error(`Remove route not returning JSON (HTTP ${res.status}).`);
     }
 
-    if (!res.ok || !data.success) throw new Error(data.message || 'Failed to delete student.');
+    if (!res.ok || !data.success) throw new Error(data.message || "Failed to delete student.");
 
-    studentDb = studentDb.filter(s => String(s.student_id) !== String(studentId));
+    studentDb = studentDb.filter((s) => String(s.student_id) !== String(studentId));
 
-    renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
+    renderStudentsTable(studentDb, statusMap, departmentMap, "student-table-body", "toggleOfficer", "openPayment", "removeStudent");
     lucide.createIcons();
 
     if (activeStudent && String(activeStudent.student_id) === String(studentId)) {
       closePayment();
     }
 
-    uiAlert('Student deleted (soft delete).', 'success', 'Deleted');
+    uiAlert("Student deleted (soft delete).", "success", "Deleted");
   } catch (err) {
     console.error(err);
-    uiAlert(err.message || 'Delete failed.', 'error', 'Delete Failed');
+    uiAlert(err.message || "Delete failed.", "error", "Delete Failed");
   }
 }
 
 // ----------------- FEES -----------------
 async function loadFees() {
   try {
-    const res = await fetch('http://localhost:3000/api/fees');
+    const res = await fetch("http://localhost:3000/api/fees");
     const data = await res.json();
     if (data.success && Array.isArray(data.fees)) {
       feesDb = data.fees;
     } else {
       feesDb = [];
-      console.warn('No fees returned from server');
+      console.warn("No fees returned from server");
     }
   } catch (err) {
-    console.error('Failed to fetch fees:', err);
+    console.error("Failed to fetch fees:", err);
     feesDb = [];
   }
 }
 
-// ----------------- LOAD ACTIVE TERM (FIXED) -----------------
+// ----------------- LOAD ACTIVE TERM -----------------
 async function loadActiveTerm() {
   try {
-    // Use strict resolver first
-    const strict = await fetchActiveTermStrict();
-
-    if (strict.success) {
-      window.CURRENT_YEAR_SEMESTER_ID = strict.semester_id;
-      const el = document.getElementById('active-term');
-      if (el) el.textContent = `${strict.semester} ${strict.year}`;
-      return;
-    }
-
-    // fallback
     const data = await fetchActiveTerm();
     if (data.success) {
       window.CURRENT_YEAR_SEMESTER_ID = data.semester_id;
-      const el = document.getElementById('active-term');
+      const el = document.getElementById("active-term");
       if (el) el.textContent = `${data.semester} ${data.year}`;
     } else {
       window.CURRENT_YEAR_SEMESTER_ID = null;
-      const el = document.getElementById('active-term');
-      if (el) el.textContent = 'No active term';
+      const el = document.getElementById("active-term");
+      if (el) el.textContent = "No active term";
     }
   } catch (err) {
-    console.error('Failed to load active term:', err);
+    console.error("Failed to load active term:", err);
     window.CURRENT_YEAR_SEMESTER_ID = null;
-    const el = document.getElementById('active-term');
-    if (el) el.textContent = 'Error loading term';
+    const el = document.getElementById("active-term");
+    if (el) el.textContent = "Error loading term";
   }
 }
 
@@ -510,11 +444,11 @@ async function loadDepartments() {
     const data = await fetchDepartments();
     if (data.success) {
       departmentMap = {};
-      data.departments.forEach(d => (departmentMap[d.department_id] = d.department_abbr));
-      renderDepartments(departmentMap, 'filter-college');
+      data.departments.forEach((d) => (departmentMap[d.department_id] = d.department_abbr));
+      renderDepartments(departmentMap, "filter-college");
     }
   } catch (err) {
-    console.error('Failed to load departments:', err);
+    console.error("Failed to load departments:", err);
   }
 }
 
@@ -524,98 +458,58 @@ async function loadStatuses() {
     const data = await fetchStatuses();
     if (data.success) {
       statusMap = {};
-      const select = document.getElementById('filter-status');
+      const select = document.getElementById("filter-status");
       if (!select) return;
 
       select.innerHTML = '<option value="All">All Status</option>';
-      data.statuses.forEach(s => {
+      data.statuses.forEach((s) => {
         statusMap[s.status_id] = s.status_name;
-        const opt = document.createElement('option');
+        const opt = document.createElement("option");
         opt.value = s.status_id;
         opt.textContent = s.status_name;
         select.appendChild(opt);
       });
     }
   } catch (err) {
-    console.error('Failed to load statuses:', err);
+    console.error("Failed to load statuses:", err);
   }
 }
 
-// ----------------- STUDENT FETCH HELPERS -----------------
-async function fetchStudentsForCurrentTerm() {
-  const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
-  if (!Number.isFinite(termId) || termId <= 0) return { success: true, students: [] };
+// ----------------- LOAD STUDENTS -----------------
+async function loadStudents() {
+  if (!window.CURRENT_YEAR_SEMESTER_ID) return;
 
-  // Try backend query param (recommended)
-  const candidates = [
-    `http://localhost:3000/api/students?semester_id=${encodeURIComponent(termId)}`,
-    `http://localhost:3000/api/students?year_semester_id=${encodeURIComponent(termId)}`
-  ];
-
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url);
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = null;
-      }
-      if (res.ok && data && data.success && Array.isArray(data.students)) {
-        return data;
-      }
-    } catch (_) {}
-  }
-
-  // Fallback: your api.js fetchStudents()
   try {
     const data = await fetchStudents();
-    return data;
-  } catch (e) {
-    return { success: false, message: e.message || 'Failed to fetch students', students: [] };
-  }
-}
-
-// ----------------- LOAD STUDENTS (TERM-BOUND) -----------------
-async function loadStudents() {
-  const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
-  if (!Number.isFinite(termId) || termId <= 0) return;
-
-  try {
-    const data = await fetchStudentsForCurrentTerm();
     if (data.success) {
-      const raw = Array.isArray(data.students) ? data.students : [];
-      const filtered = raw.filter(s => Number(s.year_semester_id) === termId);
+      studentDb = data.students;
 
-      studentDb = filtered;
-
-      renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
+      renderStudentsTable(studentDb, statusMap, departmentMap, "student-table-body", "toggleOfficer", "openPayment", "removeStudent");
       lucide.createIcons();
     }
   } catch (err) {
-    console.error('Failed to load students:', err);
+    console.error("Failed to load students:", err);
   }
 }
 
 // ----------------- LOAD COURSES -----------------
 async function loadCourses(departmentId) {
-  const select = document.getElementById('select-course');
+  const select = document.getElementById("select-course");
   if (!select) return;
 
-  select.innerHTML = '<option value="">Loading...</option>';
-  if (!departmentId) return (select.innerHTML = '<option value="">Select Course</option>');
+  select.innerHTML = "<option value=''>Loading...</option>";
+  if (!departmentId) return (select.innerHTML = "<option value=''>Select Course</option>");
 
   try {
     const data = await fetchCourses(departmentId);
     if (data.success && Array.isArray(data.courses) && data.courses.length > 0) {
-      select.innerHTML = data.courses.map(c => `<option value="${c.course_id}">${c.course_name}</option>`).join('');
+      select.innerHTML = data.courses.map((c) => `<option value="${c.course_id}">${c.course_name}</option>`).join("");
     } else {
-      select.innerHTML = '<option value="">No courses available</option>';
+      select.innerHTML = "<option value=''>No courses available</option>";
     }
   } catch (err) {
-    console.error('Failed to load courses:', err);
-    select.innerHTML = '<option value="">Error loading courses</option>';
+    console.error("Failed to load courses:", err);
+    select.innerHTML = "<option value=''>Error loading courses</option>";
   }
 }
 
@@ -635,40 +529,40 @@ async function handleManualAdd(e) {
   };
 
   if (!payload.student_id || !payload.student_firstname || !payload.student_lastname || !payload.department_id || !payload.course_id) {
-    uiAlert('Please fill in all required fields.', 'warning', 'Missing Fields');
+    uiAlert("Please fill in all required fields.", "warning", "Missing Fields");
     return;
   }
 
   try {
     const data = await addStudent(payload);
     if (data.success) {
-      if (typeof window.showStudentAddedSuccess === 'function') {
+      if (typeof window.showStudentAddedSuccess === "function") {
         window.showStudentAddedSuccess(payload.student_id);
       } else {
-        uiAlert('Student added successfully', 'success', 'Student Added');
+        uiAlert("Student added successfully", "success", "Student Added");
       }
 
       form.reset();
-      toggleModal('modal-add-student');
+      toggleModal("modal-add-student");
       await loadStudents();
     } else {
-      console.warn('Add student failed:', data.message);
+      console.warn("Add student failed:", data.message);
 
-      const msg = String(data.message || '');
-      if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('duplicate')) {
-        if (typeof window.showStudentDuplicateError === 'function') {
+      const msg = String(data.message || "");
+      if (msg.toLowerCase().includes("already exists") || msg.toLowerCase().includes("duplicate")) {
+        if (typeof window.showStudentDuplicateError === "function") {
           window.showStudentDuplicateError(payload.student_id);
         } else {
-          uiAlert(`Duplicate: ${payload.student_id} already exists.`, 'error', 'Duplicate Student');
+          uiAlert(`Duplicate: ${payload.student_id} already exists.`, "error", "Duplicate Student");
         }
         return;
       }
 
-      uiAlert('Error: ' + (data.message || 'Failed to add student'), 'error', 'Add Failed');
+      uiAlert("Error: " + (data.message || "Failed to add student"), "error", "Add Failed");
     }
   } catch (err) {
-    console.error('Error adding student:', err);
-    uiAlert('Error adding student: ' + err.message, 'error', 'Add Failed');
+    console.error("Error adding student:", err);
+    uiAlert("Error adding student: " + err.message, "error", "Add Failed");
   }
 }
 
@@ -676,48 +570,48 @@ async function handleManualAdd(e) {
 async function toggleOfficer(studentId, isChecked) {
   try {
     const data = await toggleOfficerStatus(studentId, isChecked);
-    if (!data.success) uiAlert('Failed to update officer status: ' + data.message, 'error', 'Update Failed');
+    if (!data.success) uiAlert("Failed to update officer status: " + data.message, "error", "Update Failed");
     await loadStudents();
   } catch (err) {
-    console.error('Error toggling officer:', err);
-    uiAlert('Error toggling officer: ' + err.message, 'error', 'Update Failed');
+    console.error("Error toggling officer:", err);
+    uiAlert("Error toggling officer: " + err.message, "error", "Update Failed");
   }
 }
 
 // ----------------- SEMESTER DROPDOWNS -----------------
 async function populateYearDropdown(selectedYearId = null) {
-  const select = document.getElementById('select-year');
+  const select = document.getElementById("select-year");
   if (!select) return;
 
   try {
-    const res = await fetch('http://localhost:3000/api/term/years');
+    const res = await fetch("http://localhost:3000/api/term/years");
     const data = await res.json();
 
-    select.innerHTML = '';
+    select.innerHTML = "";
 
     if (!data.success || !Array.isArray(data.years) || data.years.length === 0) {
-      select.innerHTML = '<option disabled>No years found</option>';
+      select.innerHTML = "<option disabled>No years found</option>";
       return;
     }
 
-    data.years.forEach(y => {
-      const option = document.createElement('option');
+    data.years.forEach((y) => {
+      const option = document.createElement("option");
       option.value = y.year_id;
       option.textContent = y.year_name;
       if (selectedYearId ? String(y.year_id) === String(selectedYearId) : y.is_active) option.selected = true;
       select.appendChild(option);
     });
   } catch (err) {
-    console.error('Failed to load years:', err);
-    select.innerHTML = '<option disabled>Error loading years</option>';
+    console.error("Failed to load years:", err);
+    select.innerHTML = "<option disabled>Error loading years</option>";
   }
 }
 
 async function populateSemesterDropdown(yearId = null, selectedSemesterId = null) {
-  const select = document.getElementById('select-sem');
+  const select = document.getElementById("select-sem");
   if (!select) return;
 
-  select.innerHTML = '<option value="">Loading...</option>';
+  select.innerHTML = "<option value=''>Loading...</option>";
 
   try {
     const url = yearId
@@ -727,27 +621,29 @@ async function populateSemesterDropdown(yearId = null, selectedSemesterId = null
     const res = await fetch(url);
     const data = await res.json();
 
-    select.innerHTML = '';
+    select.innerHTML = "";
 
     if (!data.success || !Array.isArray(data.semesters) || data.semesters.length === 0) {
-      select.innerHTML = '<option value="" disabled>No semesters found</option>';
+      select.innerHTML = "<option value='' disabled>No semesters found</option>";
       return;
     }
 
-    data.semesters.forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.semester_id; // id
-      opt.textContent = s.semester_name; // name
+    data.semesters.forEach((s) => {
+      const opt = document.createElement("option");
+      opt.value = s.semester_id;
+      opt.textContent = s.semester_name;
+
       if (selectedSemesterId && String(s.semester_id) === String(selectedSemesterId)) {
         opt.selected = true;
       } else if (!selectedSemesterId && s.is_active) {
         opt.selected = true;
       }
+
       select.appendChild(opt);
     });
   } catch (err) {
-    console.error('Failed to load semesters:', err);
-    select.innerHTML = '<option value="" disabled>Error loading semesters</option>';
+    console.error("Failed to load semesters:", err);
+    select.innerHTML = "<option value='' disabled>Error loading semesters</option>";
   }
 }
 
@@ -755,86 +651,77 @@ async function populateSemesterDropdown(yearId = null, selectedSemesterId = null
 function toggleModal(modalId) {
   const modal = document.getElementById(modalId);
   if (!modal) return;
-  modal.classList.toggle('hidden');
+  modal.classList.toggle("hidden");
 
-  if (!modal.classList.contains('hidden')) {
-    if (modalId === 'modal-semester') {
-      // Use strict resolver so dropdowns always align to active year + active sem inside it
-      fetchActiveTermStrict()
-        .then(async strict => {
-          if (strict.success) {
-            await populateYearDropdown(strict.year_id);
-            await populateSemesterDropdown(strict.year_id, strict.semester_id);
+  if (!modal.classList.contains("hidden")) {
+    if (modalId === "modal-semester") {
+      fetch("http://localhost:3000/api/term/active")
+        .then((res) => res.json())
+        .then(async (data) => {
+          if (data.success && data.year_id) {
+            await populateYearDropdown(data.year_id);
+            await populateSemesterDropdown(data.year_id, data.semester_id);
           } else {
-            // fallback
-            const data = await (await fetch('http://localhost:3000/api/term/active')).json();
-            if (data?.success && data.year_id) {
-              await populateYearDropdown(data.year_id);
-              await populateSemesterDropdown(data.year_id, data.semester_id);
-            } else {
-              await populateYearDropdown();
-              const yearSel = document.getElementById('select-year');
-              await populateSemesterDropdown(yearSel?.value || null, null);
-            }
+            await populateYearDropdown();
+            const yearSel = document.getElementById("select-year");
+            await populateSemesterDropdown(yearSel?.value || null, null);
           }
 
           // bind once: changing year reloads semester dropdown
-          const yearSel = document.getElementById('select-year');
+          const yearSel = document.getElementById("select-year");
           if (yearSel && !yearSel.dataset.bound) {
-            yearSel.addEventListener('change', async () => {
+            yearSel.addEventListener("change", async () => {
               await populateSemesterDropdown(yearSel.value, null);
             });
-            yearSel.dataset.bound = '1';
+            yearSel.dataset.bound = "1";
           }
         })
-        .catch(async err => {
-          console.error('Failed to open term modal:', err);
+        .catch(async (err) => {
+          console.error("Failed to fetch active term:", err);
           await populateYearDropdown();
-          const yearSel = document.getElementById('select-year');
+          const yearSel = document.getElementById("select-year");
           await populateSemesterDropdown(yearSel?.value || null, null);
         });
     }
 
-    if (modalId === 'modal-year-edit') {
+    if (modalId === "modal-year-edit") {
       populateYearDropdown();
     }
   }
 }
 
-// ----------------- PAYMENTS HELPERS -----------------
+// ----------------- PAYMENT HELPERS -----------------
 function generateControlNumber() {
-  return 'TXN-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+  return "TXN-" + Math.random().toString(36).substr(2, 9).toUpperCase();
 }
 
 function getVisibleFeeCheckboxes() {
-  const all = [...document.querySelectorAll('#fees-container .fee-checkbox')];
-  return all.filter(cb => cb.offsetParent !== null);
+  const all = [...document.querySelectorAll("#fees-container .fee-checkbox")];
+  return all.filter((cb) => cb.offsetParent !== null);
 }
 
-// Fetch payments only for current semester (backend supports ?semester_id=)
 async function fetchStudentPayments(student_id) {
   const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
-  const url = Number.isFinite(termId) && termId > 0
-    ? `http://localhost:3000/api/payments/student/${student_id}?semester_id=${termId}`
-    : `http://localhost:3000/api/payments/student/${student_id}`;
+  const url =
+    Number.isFinite(termId) && termId > 0
+      ? `http://localhost:3000/api/payments/student/${student_id}?semester_id=${termId}`
+      : `http://localhost:3000/api/payments/student/${student_id}`;
 
   const res = await fetch(url);
-  const text = await res.text();
 
+  const text = await res.text();
   let data;
   try {
     data = JSON.parse(text);
   } catch (_) {
-    throw new Error(
-      `Payment fetch route not found or not returning JSON. Check GET /api/payments/student/:student_id (HTTP ${res.status})`
-    );
+    throw new Error(`Payment fetch route not found or not returning JSON. Check GET /api/payments/student/:student_id (HTTP ${res.status})`);
   }
 
-  if (!res.ok || !data.success) throw new Error(data.message || 'Failed to fetch payments');
+  if (!res.ok || !data.success) throw new Error(data.message || "Failed to fetch payments");
   return data.payments || [];
 }
 
-// Receipt renderer: already paid vs current transaction, total only current txn (selection preview)
+// Receipt renderer: already paid vs current transaction
 function renderReceiptWithAlreadyPaid({
   availableFees,
   paidFeeIdsBefore,
@@ -842,25 +729,25 @@ function renderReceiptWithAlreadyPaid({
   controlNumber = null,
   paymentDate = null
 }) {
-  const recFeesList = document.getElementById('rec-fees-list');
-  const recTotal = document.getElementById('rec-total');
-  const recTid = document.getElementById('rec-tid');
-  const recDate = document.getElementById('rec-date');
+  const recFeesList = document.getElementById("rec-fees-list");
+  const recTotal = document.getElementById("rec-total");
+  const recTid = document.getElementById("rec-tid");
+  const recDate = document.getElementById("rec-date");
 
   if (!recFeesList || !recTotal || !recTid || !recDate) return;
 
   if (controlNumber) recTid.innerText = controlNumber;
   if (paymentDate) {
-    recDate.innerText = new Date(paymentDate).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    recDate.innerText = new Date(paymentDate).toLocaleString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
     });
   }
 
-  const currentSet = new Set(currentTxnFeeIds.map(Number).filter(n => Number.isFinite(n)));
+  const currentSet = new Set(currentTxnFeeIds.map(Number).filter((n) => Number.isFinite(n)));
   const paidBeforeSet = new Set([...paidFeeIdsBefore].map(Number));
 
   let total = 0;
@@ -894,52 +781,53 @@ function renderReceiptWithAlreadyPaid({
 
   if (lines.length === 0) {
     recFeesList.innerHTML = `<p class="text-slate-400 italic">No fees selected</p>`;
-    recTotal.innerText = '₱0.00';
-    if (!controlNumber) recTid.innerText = '---';
-    if (!paymentDate) recDate.innerText = '---';
+    recTotal.innerText = "₱0.00";
+    if (!controlNumber) recTid.innerText = "---";
+    if (!paymentDate) recDate.innerText = "---";
     return;
   }
 
-  recFeesList.innerHTML = lines.join('');
-  recTotal.innerText = '₱' + money(total);
+  recFeesList.innerHTML = lines.join("");
+  recTotal.innerText = "₱" + money(total);
 }
 
 // Render receipt using the saved lastReceipt snapshot
 function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
-  const recFeesList = document.getElementById('rec-fees-list');
-  const recTotal = document.getElementById('rec-total');
-  const recTid = document.getElementById('rec-tid');
-  const recDate = document.getElementById('rec-date');
-  const issuerEl = document.getElementById('rec-issuer-name');
-  const studentEl = document.getElementById('rec-student');
+  const recFeesList = document.getElementById("rec-fees-list");
+  const recTotal = document.getElementById("rec-total");
+  const recTid = document.getElementById("rec-tid");
+  const recDate = document.getElementById("rec-date");
+  const issuerEl = document.getElementById("rec-issuer-name");
+  const studentEl = document.getElementById("rec-student");
 
   if (!recFeesList || !recTotal || !recTid || !recDate) return;
 
-  recTid.innerText = lastReceipt.controlNumber || '---';
+  recTid.innerText = lastReceipt.controlNumber || "---";
   recDate.innerText = lastReceipt.dateISO
-    ? new Date(lastReceipt.dateISO).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+    ? new Date(lastReceipt.dateISO).toLocaleString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
       })
-    : '---';
+    : "---";
 
-  if (issuerEl) issuerEl.innerText = lastReceipt.issuedBy || (issuerEl.innerText || 'Cashier');
-  if (studentEl) studentEl.innerText = lastReceipt.studentName || (studentEl.innerText || '');
+  if (issuerEl) issuerEl.innerText = lastReceipt.issuedBy || issuerEl.innerText || "Cashier";
+  if (studentEl) studentEl.innerText = lastReceipt.studentName || studentEl.innerText || "";
 
   const paidBeforeSet = new Set([...paidFeeIdsBefore].map(Number));
-  const feeMap = new Map((availableFees || []).map(f => [Number(f.fee_id), f]));
+  const feeMap = new Map((availableFees || []).map((f) => [Number(f.fee_id), f]));
 
   const lines = [];
   let total = 0;
 
-  // show already paid lines (not in this receipt)
   if (Array.isArray(availableFees) && availableFees.length) {
     for (const fee of availableFees) {
       const feeId = Number(fee.fee_id);
-      if (paidBeforeSet.has(feeId) && !(lastReceipt.items || []).some(x => Number(x.fee_id) === feeId)) {
+      const wasInLastReceipt = (lastReceipt.items || []).some((x) => Number(x.fee_id) === feeId);
+
+      if (paidBeforeSet.has(feeId) && !wasInLastReceipt) {
         lines.push(`
           <div class="flex justify-between items-center">
             <span class="font-bold">${fee.fee_name}</span>
@@ -950,16 +838,12 @@ function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
     }
   }
 
-  // show paid items (this receipt)
-  for (const it of (lastReceipt.items || [])) {
+  for (const it of lastReceipt.items || []) {
     const feeId = Number(it.fee_id);
     const amt = Number(it.amount_paid || 0);
     total += amt;
 
-    const displayName =
-      it.fee_name ||
-      feeMap.get(feeId)?.fee_name ||
-      `Fee #${feeId}`;
+    const displayName = it.fee_name || feeMap.get(feeId)?.fee_name || `Fee #${feeId}`;
 
     lines.push(`
       <div class="flex justify-between">
@@ -969,79 +853,44 @@ function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
     `);
   }
 
-  recFeesList.innerHTML = lines.length
-    ? lines.join('')
-    : `<p class="text-slate-400 italic">No fees selected</p>`;
-
-  recTotal.innerText = '₱' + money(total);
-}
-
-// Receipt meta helpers
-function clearReceiptMeta() {
-  const recTid = document.getElementById('rec-tid');
-  const recDate = document.getElementById('rec-date');
-  if (recTid) recTid.innerText = '---';
-  if (recDate) recDate.innerText = '---';
-}
-
-function resetLastReceiptSnapshot() {
-  lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
-}
-
-function getPaidFeeIdsForActiveStudent() {
-  const sid = activeStudent?.student_id;
-  return paymentCacheByStudent[sid]?.paidFeeIds || new Set();
-}
-
-function beginNewPaymentSession({ availableFees }) {
-  receiptLocked = false;
-  resetLastReceiptSnapshot();
-  clearReceiptMeta();
-  unlockTotal();
-
-  const paidFeeIds = getPaidFeeIdsForActiveStudent();
-  renderReceiptWithAlreadyPaid({
-    availableFees,
-    paidFeeIdsBefore: paidFeeIds,
-    currentTxnFeeIds: [],
-    controlNumber: null,
-    paymentDate: null
-  });
+  recFeesList.innerHTML = lines.length ? lines.join("") : `<p class="text-slate-400 italic">No fees selected</p>`;
+  recTotal.innerText = "₱" + money(total);
 }
 
 // Bind PAY button once
 function setupPayButton() {
-  const payBtn = document.getElementById('btn-pay-now');
+  const payBtn = document.getElementById("btn-pay-now");
   if (!payBtn) return;
-  if (payBtn.dataset.bound === '1') return;
+  if (payBtn.dataset.bound === "1") return;
 
-  payBtn.addEventListener('click', handlePayNow);
-  payBtn.dataset.bound = '1';
+  payBtn.addEventListener("click", handlePayNow);
+  payBtn.dataset.bound = "1";
 }
 
 // ----------------- OPEN PAYMENT -----------------
 async function openPayment(studentId) {
   unlockTotal();
 
-  activeStudent = studentDb.find(s => String(s.student_id) === String(studentId));
+  activeStudent = studentDb.find((s) => s.student_id === studentId);
   if (!activeStudent) return;
 
   setupPayButton();
   setupReprintControls();
 
   receiptLocked = false;
-  resetLastReceiptSnapshot();
+  lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
+
   resetReprintUI();
 
   const studentName = `${activeStudent.student_firstname} ${activeStudent.student_lastname}`;
-  document.getElementById('pay-student-name').innerText = `${studentName} (${activeStudent.student_id})`;
-  document.getElementById('rec-student').innerText = studentName;
+  document.getElementById("pay-student-name").innerText = `${studentName} (${activeStudent.student_id})`;
+  document.getElementById("rec-student").innerText = studentName;
 
-  const issuerName = document.getElementById('user-role')?.innerText || 'Cashier';
-  document.getElementById('rec-issuer-name').innerText = issuerName;
+  const issuerName = document.getElementById("user-role")?.innerText || "Cashier";
+  document.getElementById("rec-issuer-name").innerText = issuerName;
 
   if (!Array.isArray(feesDb) || feesDb.length === 0) {
-    uiAlert('No fees available.', 'warning', 'Fees');
+    uiAlert("No fees available.", "warning", "Fees");
     return;
   }
 
@@ -1049,67 +898,74 @@ async function openPayment(studentId) {
   const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
 
   const availableFees = (feesDb || [])
-    .filter(fee => Number(fee.semester_id) === termId)
-    .filter(fee => String(fee.role) === String(studentRole));
+    .filter((fee) => Number(fee.semester_id) === termId)
+    .filter((fee) => String(fee.role) === String(studentRole));
 
-  // fetch paid fees for this term
   let payments = [];
   try {
     payments = await fetchStudentPayments(activeStudent.student_id);
   } catch (e) {
-    console.warn('fetchStudentPayments failed:', e.message);
+    console.warn("fetchStudentPayments failed:", e.message);
     payments = [];
   }
 
-  const paidFeeIds = new Set(payments.map(p => Number(p.fee_id)).filter(n => Number.isFinite(n)));
+  const paidFeeIds = new Set(payments.map((p) => Number(p.fee_id)).filter((n) => Number.isFinite(n)));
   paymentCacheByStudent[activeStudent.student_id] = { payments, paidFeeIds };
 
-  // populate reprint select
-  const reprintSelect = document.getElementById('reprint-select');
+  const reprintSelect = document.getElementById("reprint-select");
   if (reprintSelect) {
     try {
       const txns = await fetchStudentTransactions(activeStudent.student_id);
-      reprintSelect.innerHTML = '';
+      reprintSelect.innerHTML = "";
       if (!txns.length) {
         reprintSelect.innerHTML = `<option value="">No previous receipts</option>`;
       } else {
         reprintSelect.innerHTML =
           `<option value="">Select a receipt...</option>` +
           txns
-            .map(t => {
+            .map((t) => {
               const dt = t.payment_date ? new Date(t.payment_date) : null;
-              const label = `${t.control_number} — ${dt ? dt.toLocaleString() : ''} — ₱${money(t.total_amount)}`;
+              const label = `${t.control_number} — ${dt ? dt.toLocaleString() : ""} — ₱${money(t.total_amount)}`;
               return `<option value="${t.control_number}">${label}</option>`;
             })
-            .join('');
+            .join("");
       }
     } catch (e) {
-      console.warn('fetchStudentTransactions failed:', e.message);
+      console.warn("fetchStudentTransactions failed:", e.message);
       reprintSelect.innerHTML = `<option value="">No previous receipts</option>`;
     }
   }
 
-  const feesContainer = document.getElementById('fees-container');
-  if (!feesContainer) return console.error('Fees container not found!');
-  feesContainer.innerHTML = '';
+  const feesContainer = document.getElementById("fees-container");
+  if (!feesContainer) return console.error("Fees container not found!");
+  feesContainer.innerHTML = "";
 
   const getPaidFeeIdsNow = () => paymentCacheByStudent[activeStudent.student_id]?.paidFeeIds || paidFeeIds;
 
   const startNewSelectionSessionIfNeeded = () => {
     if (!receiptLocked) return;
-    beginNewPaymentSession({ availableFees });
+
+    receiptLocked = false;
+    unlockTotal();
+
+    lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
+
+    const recTid = document.getElementById("rec-tid");
+    const recDate = document.getElementById("rec-date");
+    if (recTid) recTid.innerText = "---";
+    if (recDate) recDate.innerText = "---";
   };
 
   if (availableFees.length === 0) {
     feesContainer.innerHTML = `<p class="text-slate-400 italic text-xs">No applicable fees for this student (this semester)</p>`;
   } else {
-    availableFees.forEach(fee => {
+    availableFees.forEach((fee) => {
       const priceFormatted = money(fee.fee_amount);
       const isPaid = getPaidFeeIdsNow().has(Number(fee.fee_id));
 
-      const label = document.createElement('label');
+      const label = document.createElement("label");
       label.className =
-        'flex items-center justify-between p-3 bg-white rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300';
+        "flex items-center justify-between p-3 bg-white rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300";
 
       label.innerHTML = `
         <div class="flex items-center gap-3">
@@ -1125,22 +981,23 @@ async function openPayment(studentId) {
         <span class="font-mono text-xs font-bold">₱${priceFormatted}</span>
       `;
 
-      const cb = label.querySelector('input.fee-checkbox');
+      const cb = label.querySelector("input.fee-checkbox");
 
       if (isPaid) {
         cb.checked = false;
         cb.disabled = true;
-        label.classList.add('opacity-60', 'cursor-not-allowed');
-        label.classList.remove('cursor-pointer', 'hover:border-blue-300');
+        label.classList.add("opacity-60", "cursor-not-allowed");
+        label.classList.remove("cursor-pointer", "hover:border-blue-300");
       } else {
-        cb.addEventListener('change', () => {
+        cb.addEventListener("change", () => {
           startNewSelectionSessionIfNeeded();
+
           calculateTotalFees();
 
-          const selectedIds = [...document.querySelectorAll('#fees-container .fee-checkbox:checked')]
-            .filter(x => !x.disabled)
-            .map(x => Number(x.getAttribute('data-fee-id')))
-            .filter(n => Number.isFinite(n));
+          const selectedIds = [...document.querySelectorAll("#fees-container .fee-checkbox:checked")]
+            .filter((x) => !x.disabled)
+            .map((x) => Number(x.getAttribute("data-fee-id")))
+            .filter((n) => Number.isFinite(n));
 
           const paidNow = getPaidFeeIdsNow();
 
@@ -1168,83 +1025,86 @@ async function openPayment(studentId) {
     paymentDate: null
   });
 
-  clearReceiptMeta();
+  const recTid = document.getElementById("rec-tid");
+  const recDate = document.getElementById("rec-date");
+  if (recTid) recTid.innerText = "---";
+  if (recDate) recDate.innerText = "---";
 
-  document.getElementById('payment-modal')?.classList.remove('hidden');
+  document.getElementById("payment-modal")?.classList.remove("hidden");
 }
 
 function closePayment() {
   unlockTotal();
-  document.getElementById('payment-modal')?.classList.add('hidden');
+  document.getElementById("payment-modal")?.classList.add("hidden");
   activeStudent = null;
 }
 
 // ----------------- PAY NOW -----------------
 async function handlePayNow() {
-  const payBtn = document.getElementById('btn-pay-now');
+  const payBtn = document.getElementById("btn-pay-now");
   if (payBtn?.disabled) return;
 
   if (!activeStudent) {
-    uiAlert('No active student selected.', 'warning', 'Payment');
+    uiAlert("No active student selected.", "warning", "Payment");
     return;
   }
 
-  if (receiptMode === 'REPRINT') {
-    uiAlert('Currently viewing a previous receipt. Clear the reprint selection to continue paying.', 'warning', 'Payment');
+  if (receiptMode === "REPRINT") {
+    uiAlert("Currently viewing a previous receipt. Clear the reprint selection to continue paying.", "warning", "Payment");
     return;
   }
 
   const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
   if (!Number.isFinite(termId) || termId <= 0) {
-    uiAlert('No active term found.', 'warning', 'Payment');
+    uiAlert("No active term found.", "warning", "Payment");
     return;
   }
 
   const studentRole = getStudentRoleString(activeStudent);
 
   const availableFees = (feesDb || [])
-    .filter(fee => Number(fee.semester_id) === termId)
-    .filter(fee => String(fee.role) === String(studentRole));
+    .filter((fee) => Number(fee.semester_id) === termId)
+    .filter((fee) => String(fee.role) === String(studentRole));
 
   const paidFeeIdsBefore = paymentCacheByStudent[activeStudent.student_id]?.paidFeeIds || new Set();
 
-  const checked = [...document.querySelectorAll('#fees-container .fee-checkbox:checked')].filter(cb => !cb.disabled);
+  const checked = [...document.querySelectorAll("#fees-container .fee-checkbox:checked")].filter((cb) => !cb.disabled);
 
   if (checked.length === 0) {
-    uiAlert('Please select at least one unpaid fee to pay.', 'warning', 'Payment');
+    uiAlert("Please select at least one unpaid fee to pay.", "warning", "Payment");
     return;
   }
 
   const selectedItems = checked
-    .map(cb => ({
-      fee_id: Number(cb.getAttribute('data-fee-id')),
-      fee_name: cb.getAttribute('data-fee') || cb.dataset.fee || 'Fee',
-      amount_paid: Number(cb.getAttribute('data-price'))
+    .map((cb) => ({
+      fee_id: Number(cb.getAttribute("data-fee-id")),
+      fee_name: cb.getAttribute("data-fee") || cb.dataset.fee || "Fee",
+      amount_paid: Number(cb.getAttribute("data-price"))
     }))
-    .filter(x => Number.isFinite(x.fee_id) && x.fee_id > 0 && Number.isFinite(x.amount_paid));
+    .filter((x) => Number.isFinite(x.fee_id) && x.fee_id > 0 && Number.isFinite(x.amount_paid));
 
-  const feesToPay = selectedItems.map(x => ({ fee_id: x.fee_id, amount_paid: x.amount_paid }));
+  const feesToPay = selectedItems.map((x) => ({ fee_id: x.fee_id, amount_paid: x.amount_paid }));
   if (feesToPay.length === 0) {
-    uiAlert('Could not read selected fees (missing data-fee-id).', 'error', 'Payment Failed');
+    uiAlert("Could not read selected fees (missing data-fee-id).", "error", "Payment Failed");
     return;
   }
 
   const visibleFeeIds = getVisibleFeeCheckboxes()
-    .map(cb => Number(cb.getAttribute('data-fee-id')))
-    .filter(n => Number.isFinite(n) && n > 0);
+    .map((cb) => Number(cb.getAttribute("data-fee-id")))
+    .filter((n) => Number.isFinite(n) && n > 0);
 
   const controlNumber = generateControlNumber();
-  const issuedBy = document.getElementById('user-role')?.innerText || 'Cashier';
+  const issuedBy = document.getElementById("user-role")?.innerText || "Cashier";
   const studentName = `${activeStudent.student_firstname} ${activeStudent.student_lastname}`;
 
   payBtn.disabled = true;
-  payBtn.classList.add('opacity-60', 'cursor-not-allowed');
-  payBtn.textContent = 'PROCESSING...';
+  payBtn.classList.add("opacity-60", "cursor-not-allowed");
+  payBtn.textContent = "PROCESSING...";
 
   try {
-    const res = await fetch('http://localhost:3000/api/payments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("http://localhost:3000/api/payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         student_id: activeStudent.student_id,
         semester_id: termId,
@@ -1263,7 +1123,7 @@ async function handlePayNow() {
       throw new Error(`POST /api/payments did not return JSON (HTTP ${res.status}).`);
     }
 
-    if (!res.ok || !data.success) throw new Error(data.message || 'Payment failed.');
+    if (!res.ok || !data.success) throw new Error(data.message || "Payment failed.");
 
     const now = new Date();
 
@@ -1281,71 +1141,66 @@ async function handlePayNow() {
 
     lockTotal(selectedItems.reduce((s, i) => s + Number(i.amount_paid || 0), 0));
 
-    // refresh paid fees cache
     let payments = [];
     try {
       payments = await fetchStudentPayments(activeStudent.student_id);
     } catch (e) {
-      console.warn('fetchStudentPayments after pay failed:', e.message);
+      console.warn("fetchStudentPayments after pay failed:", e.message);
       payments = [];
     }
 
-    const paidFeeIdsAfter = new Set(payments.map(p => Number(p.fee_id)).filter(n => Number.isFinite(n)));
+    const paidFeeIdsAfter = new Set(payments.map((p) => Number(p.fee_id)).filter((n) => Number.isFinite(n)));
     paymentCacheByStudent[activeStudent.student_id] = { payments, paidFeeIds: paidFeeIdsAfter };
 
-    // disable now-paid checkboxes
-    document.querySelectorAll('#fees-container .fee-checkbox').forEach(cb => {
-      const feeId = Number(cb.getAttribute('data-fee-id'));
+    document.querySelectorAll("#fees-container .fee-checkbox").forEach((cb) => {
+      const feeId = Number(cb.getAttribute("data-fee-id"));
       if (paidFeeIdsAfter.has(feeId)) {
         cb.checked = false;
         cb.disabled = true;
-        cb.closest('label')?.classList.add('opacity-60', 'cursor-not-allowed');
-        cb.closest('label')?.classList.remove('cursor-pointer', 'hover:border-blue-300');
+        cb.closest("label")?.classList.add("opacity-60", "cursor-not-allowed");
+        cb.closest("label")?.classList.remove("cursor-pointer", "hover:border-blue-300");
       }
     });
 
     calculateTotalFees();
 
-    // update status locally + rerender table
     activeStudent.status_id = data.status_id;
-    const idx = studentDb.findIndex(s => String(s.student_id) === String(activeStudent.student_id));
+    const idx = studentDb.findIndex((s) => s.student_id === activeStudent.student_id);
     if (idx !== -1) studentDb[idx].status_id = data.status_id;
 
-    renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
+    renderStudentsTable(studentDb, statusMap, departmentMap, "student-table-body", "toggleOfficer", "openPayment", "removeStudent");
 
-    uiAlert('Payment processed successfully.', 'success', 'Payment Successful');
+    uiAlert("Payment processed successfully.", "success", "Payment Successful");
   } catch (err) {
     console.error(err);
-    uiAlert(err.message || 'Payment failed.', 'error', 'Payment Failed');
+    uiAlert(err.message || "Payment failed.", "error", "Payment Failed");
   } finally {
     payBtn.disabled = false;
-    payBtn.classList.remove('opacity-60', 'cursor-not-allowed');
-    payBtn.textContent = 'PAY';
+    payBtn.classList.remove("opacity-60", "cursor-not-allowed");
+    payBtn.textContent = "PAY";
   }
 }
 
 // ----------------- ISSUE & PRINT RECEIPT -----------------
 function issueAndPrint() {
-  const tidEl = document.getElementById('rec-tid');
-  const currentTid = (tidEl?.innerText || '---').trim();
+  const tidEl = document.getElementById("rec-tid");
+  const currentTid = (tidEl?.innerText || "---").trim();
 
-  if (!currentTid || currentTid === '---') {
-    uiAlert('No saved transaction yet. Please click PAY first before printing.', 'warning', 'Print Receipt');
+  if (!currentTid || currentTid === "---") {
+    uiAlert("No saved transaction yet. Please click PAY first before printing.", "warning", "Print Receipt");
     return;
   }
 
-  const receiptNode =
-    document.getElementById('receipt-paper') ||
-    document.getElementById('receipt-body-template');
+  const receiptNode = document.getElementById("receipt-paper") || document.getElementById("receipt-body-template");
 
-  const receiptHTML = receiptNode?.outerHTML || '';
-  const printContainer = document.getElementById('print-container');
+  const receiptHTML = receiptNode?.outerHTML || "";
+  const printContainer = document.getElementById("print-container");
   if (!printContainer) {
-    uiAlert('Print container not found.', 'error', 'Print Receipt');
+    uiAlert("Print container not found.", "error", "Print Receipt");
     return;
   }
 
-  printContainer.classList.remove('hidden');
+  printContainer.classList.remove("hidden");
   printContainer.innerHTML = `
     <div class="print-page-layout">
       <div class="receipt-copy">
@@ -1354,13 +1209,13 @@ function issueAndPrint() {
     </div>
   `;
 
-  document.body.classList.add('printing');
+  document.body.classList.add("printing");
   setTimeout(() => {
     window.print();
     setTimeout(() => {
-      document.body.classList.remove('printing');
-      printContainer.innerHTML = '';
-      printContainer.classList.add('hidden');
+      document.body.classList.remove("printing");
+      printContainer.innerHTML = "";
+      printContainer.classList.add("hidden");
       closePayment();
     }, 500);
   }, 100);
@@ -1368,28 +1223,23 @@ function issueAndPrint() {
 
 // ----------------- FILTER STUDENTS -----------------
 window.filterStudents = function filterStudents() {
-  const search = (document.getElementById('search-id')?.value || '').toLowerCase().trim();
-  const status = document.getElementById('filter-status')?.value || 'All';
-  const department = document.getElementById('filter-college')?.value || 'All';
+  const search = (document.getElementById("search-id")?.value || "").toLowerCase().trim();
+  const status = document.getElementById("filter-status")?.value || "All";
+  const department = document.getElementById("filter-college")?.value || "All";
 
-  const filtered = (studentDb || []).filter(s => {
-    const studentIdStr = String(s.student_id ?? '').toLowerCase();
-    const first = String(s.student_firstname ?? '').toLowerCase();
-    const last = String(s.student_lastname ?? '').toLowerCase();
+  const filtered = (studentDb || []).filter((s) => {
+    const studentIdStr = String(s.student_id ?? "").toLowerCase();
+    const first = String(s.student_firstname ?? "").toLowerCase();
+    const last = String(s.student_lastname ?? "").toLowerCase();
 
-    const matchesSearch =
-      !search ||
-      studentIdStr.includes(search) ||
-      first.includes(search) ||
-      last.includes(search);
-
-    const matchesStatus = status === 'All' || String(s.status_id) === String(status);
-    const matchesDept = department === 'All' || String(s.department_id) === String(department);
+    const matchesSearch = !search || studentIdStr.includes(search) || first.includes(search) || last.includes(search);
+    const matchesStatus = status === "All" || String(s.status_id) === String(status);
+    const matchesDept = department === "All" || String(s.department_id) === String(department);
 
     return matchesSearch && matchesStatus && matchesDept;
   });
 
-  renderStudentsTable(filtered, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
+  renderStudentsTable(filtered, statusMap, departmentMap, "student-table-body", "toggleOfficer", "openPayment", "removeStudent");
   lucide.createIcons();
 };
 
@@ -1404,6 +1254,3 @@ window.issueAndPrint = issueAndPrint;
 window.handleManualAdd = handleManualAdd;
 window.handlePayNow = handlePayNow;
 window.removeStudent = removeStudent;
-
-// make sure HTML onclick="requestUpdateTerm()" works:
-window.requestUpdateTerm = window.requestUpdateTerm;
