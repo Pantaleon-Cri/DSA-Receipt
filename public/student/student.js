@@ -1,8 +1,15 @@
 // student.js
 import {
-  fetchActiveTerm, fetchDepartments, fetchStatuses, fetchStudents, fetchCourses,
-  addStudent, toggleOfficerStatus, updateTerm
+  fetchActiveTerm,
+  fetchDepartments,
+  fetchStatuses,
+  fetchStudents,
+  fetchCourses,
+  addStudent,
+  toggleOfficerStatus,
+  updateTerm
 } from './api.js';
+
 import { renderStudentsTable, renderDepartments } from './render.js';
 import { calculateTotalFees, toggleSidebar, lockTotal, unlockTotal } from './utils.js';
 
@@ -75,7 +82,9 @@ function uiConfirm({
       const originalClose = window.closeConfirm;
       if (typeof originalClose === 'function') {
         window.closeConfirm = function () {
-          try { originalClose(); } finally {
+          try {
+            originalClose();
+          } finally {
             resolve(false);
             window.closeConfirm = originalClose;
           }
@@ -144,7 +153,57 @@ function setupReprintControls() {
   }
 }
 
-// ----------------- TERM / SEMESTER UPDATE (FIXED) -----------------
+// ----------------- ✅ STRICT ACTIVE TERM RESOLVER (FIX) -----------------
+// If your backend sometimes returns wrong /active due to DB inconsistency,
+// this resolver deterministically finds the active year then active semester inside it.
+async function fetchActiveTermStrict() {
+  // 1) find active year
+  const yRes = await fetch('http://localhost:3000/api/term/years');
+  const yData = await yRes.json();
+  if (!yData?.success || !Array.isArray(yData.years)) {
+    return { success: false, message: 'Failed to load years' };
+  }
+
+  const activeYear = yData.years.find(y => !!y.is_active);
+  if (!activeYear) {
+    return { success: false, message: 'No active year found' };
+  }
+
+  // 2) find active semester inside that year
+  const sRes = await fetch(
+    `http://localhost:3000/api/term/semesters?year_id=${encodeURIComponent(activeYear.year_id)}`
+  );
+  const sData = await sRes.json();
+  if (!sData?.success || !Array.isArray(sData.semesters)) {
+    return { success: false, message: 'Failed to load semesters for active year' };
+  }
+
+  const activeSem = sData.semesters.find(s => !!s.is_active);
+  if (!activeSem) {
+    return { success: false, message: 'No active semester found in active year' };
+  }
+
+  // optional: student population
+  let student_population = 0;
+  try {
+    const aRes = await fetch('http://localhost:3000/api/term/active');
+    const aData = await aRes.json();
+    if (aData?.success && Number.isFinite(Number(aData.student_population))) {
+      student_population = Number(aData.student_population);
+    }
+  } catch {}
+
+  return {
+    success: true,
+    year_id: activeYear.year_id,
+    year: activeYear.year_name,
+    semester_id: activeSem.semester_id,
+    semester: activeSem.semester_name,
+    student_population
+  };
+}
+
+// ----------------- TERM / SEMESTER UPDATE -----------------
 window.requestUpdateTerm = async function requestUpdateTerm() {
   const yearInput = document.getElementById('input-ay')?.value.trim();
   const semInput = document.getElementById('input-sem-manual')?.value.trim();
@@ -152,6 +211,9 @@ window.requestUpdateTerm = async function requestUpdateTerm() {
   const yearSelect = document.getElementById('select-year');
   const semSelect = document.getElementById('select-sem');
 
+  // NOTE:
+  // - Backend /term/update expects NAMES (your current routes use year_name & semester_name)
+  // - Dropdown option textContent is the name, option.value is the id.
   const yearName =
     yearInput ||
     yearSelect?.selectedOptions?.[0]?.textContent?.trim();
@@ -181,18 +243,35 @@ window.requestUpdateTerm = async function requestUpdateTerm() {
     if (ay) ay.value = '';
     if (sm) sm.value = '';
 
+    // IMPORTANT: clear selection + caches when switching term
+    try {
+      closePayment();
+    } catch {}
+    activeStudent = null;
+    for (const k of Object.keys(paymentCacheByStudent)) delete paymentCacheByStudent[k];
+    receiptLocked = false;
+    resetLastReceiptSnapshot();
+    clearReceiptMeta();
+    resetReprintUI();
+
     // refresh active term label (and CURRENT_YEAR_SEMESTER_ID)
     await loadActiveTerm();
 
     // refresh dropdowns to reflect active
     try {
-      const active = await fetchActiveTerm();
-      if (active?.success) {
-        await populateYearDropdown(active.year_id);
-        await populateSemesterDropdown(active.year_id, active.semester_id);
+      const strict = await fetchActiveTermStrict();
+      if (strict?.success) {
+        await populateYearDropdown(strict.year_id);
+        await populateSemesterDropdown(strict.year_id, strict.semester_id);
       } else {
-        await populateYearDropdown();
-        await populateSemesterDropdown();
+        const active = await fetchActiveTerm();
+        if (active?.success) {
+          await populateYearDropdown(active.year_id);
+          await populateSemesterDropdown(active.year_id, active.semester_id);
+        } else {
+          await populateYearDropdown();
+          await populateSemesterDropdown();
+        }
       }
     } catch {
       await populateYearDropdown();
@@ -226,6 +305,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('select-department')?.addEventListener('change', e => loadCourses(e.target.value));
   const addStudentForm = document.getElementById('form-add-student');
   if (addStudentForm) addStudentForm.addEventListener('submit', handleManualAdd);
+
+  // Optional: if you have a "Reprint" button in HTML
+  const btnReprint = document.getElementById('btn-reprint-receipt');
+  if (btnReprint && !btnReprint.dataset.bound) {
+    btnReprint.addEventListener('click', handleReprintReceipt);
+    btnReprint.dataset.bound = '1';
+  }
 });
 
 // ----------------- REPRINT HELPERS (require backend routes) -----------------
@@ -238,8 +324,11 @@ async function fetchStudentTransactions(student_id) {
   const res = await fetch(url);
   const text = await res.text();
   let data;
-  try { data = JSON.parse(text); }
-  catch { throw new Error(`Transactions route not returning JSON (HTTP ${res.status}).`); }
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Transactions route not returning JSON (HTTP ${res.status}).`);
+  }
   if (!res.ok || !data.success) throw new Error(data.message || 'Failed to fetch transactions');
   return data.transactions || [];
 }
@@ -248,8 +337,11 @@ async function fetchReceiptByControlNumber(controlNumber) {
   const res = await fetch(`http://localhost:3000/api/payments/receipt/${encodeURIComponent(controlNumber)}`);
   const text = await res.text();
   let data;
-  try { data = JSON.parse(text); }
-  catch { throw new Error(`Receipt route not returning JSON (HTTP ${res.status}).`); }
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Receipt route not returning JSON (HTTP ${res.status}).`);
+  }
   if (!res.ok || !data.success) throw new Error(data.message || 'Failed to fetch receipt');
   return data.receipt;
 }
@@ -266,20 +358,26 @@ function renderReceiptFromDbReceipt(receipt) {
   tidEl.innerText = receipt.control_number || '---';
   dateEl.innerText = receipt.payment_date
     ? new Date(receipt.payment_date).toLocaleString('en-US', {
-        year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       })
     : '---';
   issuerEl.innerText = receipt.issued_by || 'Cashier';
 
-  listEl.innerHTML = (receipt.items || []).map(it => {
-    const amt = Number(it.amount_paid || 0);
-    return `
-      <div class="flex justify-between">
-        <span class="font-bold">${it.fee_name || `Fee #${it.fee_id}`}</span>
-        <span class="font-mono font-bold">₱${money(amt)}</span>
-      </div>
-    `;
-  }).join('');
+  listEl.innerHTML = (receipt.items || [])
+    .map(it => {
+      const amt = Number(it.amount_paid || 0);
+      return `
+        <div class="flex justify-between">
+          <span class="font-bold">${it.fee_name || `Fee #${it.fee_id}`}</span>
+          <span class="font-mono font-bold">₱${money(amt)}</span>
+        </div>
+      `;
+    })
+    .join('');
 
   const total = Number(receipt.total_amount || 0);
   totalEl.innerText = '₱' + money(total);
@@ -306,6 +404,7 @@ async function handleReprintReceipt() {
 }
 window.handleReprintReceipt = handleReprintReceipt;
 
+// ----------------- REMOVE STUDENT (SOFT DELETE) -----------------
 async function removeStudent(studentId) {
   const student = (studentDb || []).find(s => String(s.student_id) === String(studentId));
 
@@ -332,8 +431,11 @@ async function removeStudent(studentId) {
 
     const text = await res.text();
     let data;
-    try { data = JSON.parse(text); }
-    catch { throw new Error(`Remove route not returning JSON (HTTP ${res.status}).`); }
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`Remove route not returning JSON (HTTP ${res.status}).`);
+    }
 
     if (!res.ok || !data.success) throw new Error(data.message || 'Failed to delete student.');
 
@@ -370,9 +472,20 @@ async function loadFees() {
   }
 }
 
-// ----------------- LOAD ACTIVE TERM -----------------
+// ----------------- LOAD ACTIVE TERM (FIXED) -----------------
 async function loadActiveTerm() {
   try {
+    // Use strict resolver first
+    const strict = await fetchActiveTermStrict();
+
+    if (strict.success) {
+      window.CURRENT_YEAR_SEMESTER_ID = strict.semester_id;
+      const el = document.getElementById('active-term');
+      if (el) el.textContent = `${strict.semester} ${strict.year}`;
+      return;
+    }
+
+    // fallback
     const data = await fetchActiveTerm();
     if (data.success) {
       window.CURRENT_YEAR_SEMESTER_ID = data.semester_id;
@@ -428,14 +541,54 @@ async function loadStatuses() {
   }
 }
 
-// ----------------- LOAD STUDENTS -----------------
-async function loadStudents() {
-  if (!window.CURRENT_YEAR_SEMESTER_ID) return;
+// ----------------- STUDENT FETCH HELPERS -----------------
+async function fetchStudentsForCurrentTerm() {
+  const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
+  if (!Number.isFinite(termId) || termId <= 0) return { success: true, students: [] };
 
+  // Try backend query param (recommended)
+  const candidates = [
+    `http://localhost:3000/api/students?semester_id=${encodeURIComponent(termId)}`,
+    `http://localhost:3000/api/students?year_semester_id=${encodeURIComponent(termId)}`
+  ];
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url);
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+      if (res.ok && data && data.success && Array.isArray(data.students)) {
+        return data;
+      }
+    } catch (_) {}
+  }
+
+  // Fallback: your api.js fetchStudents()
   try {
     const data = await fetchStudents();
+    return data;
+  } catch (e) {
+    return { success: false, message: e.message || 'Failed to fetch students', students: [] };
+  }
+}
+
+// ----------------- LOAD STUDENTS (TERM-BOUND) -----------------
+async function loadStudents() {
+  const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
+  if (!Number.isFinite(termId) || termId <= 0) return;
+
+  try {
+    const data = await fetchStudentsForCurrentTerm();
     if (data.success) {
-      studentDb = data.students;
+      const raw = Array.isArray(data.students) ? data.students : [];
+      const filtered = raw.filter(s => Number(s.year_semester_id) === termId);
+
+      studentDb = filtered;
 
       renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
       lucide.createIcons();
@@ -531,7 +684,7 @@ async function toggleOfficer(studentId, isChecked) {
   }
 }
 
-// ----------------- SEMESTER DROPDOWNS (FIXED: year-aware + ids) -----------------
+// ----------------- SEMESTER DROPDOWNS -----------------
 async function populateYearDropdown(selectedYearId = null) {
   const select = document.getElementById('select-year');
   if (!select) return;
@@ -583,8 +736,8 @@ async function populateSemesterDropdown(yearId = null, selectedSemesterId = null
 
     data.semesters.forEach(s => {
       const opt = document.createElement('option');
-      opt.value = s.semester_id;            // ✅ id
-      opt.textContent = s.semester_name;    // ✅ name
+      opt.value = s.semester_id; // id
+      opt.textContent = s.semester_name; // name
       if (selectedSemesterId && String(s.semester_id) === String(selectedSemesterId)) {
         opt.selected = true;
       } else if (!selectedSemesterId && s.is_active) {
@@ -598,7 +751,7 @@ async function populateSemesterDropdown(yearId = null, selectedSemesterId = null
   }
 }
 
-// ----------------- MODALS (FIXED: bind year->semester + open with active term) -----------------
+// ----------------- MODALS -----------------
 function toggleModal(modalId) {
   const modal = document.getElementById(modalId);
   if (!modal) return;
@@ -606,16 +759,23 @@ function toggleModal(modalId) {
 
   if (!modal.classList.contains('hidden')) {
     if (modalId === 'modal-semester') {
-      fetch('http://localhost:3000/api/term/active')
-        .then(res => res.json())
-        .then(async data => {
-          if (data.success && data.year_id) {
-            await populateYearDropdown(data.year_id);
-            await populateSemesterDropdown(data.year_id, data.semester_id);
+      // Use strict resolver so dropdowns always align to active year + active sem inside it
+      fetchActiveTermStrict()
+        .then(async strict => {
+          if (strict.success) {
+            await populateYearDropdown(strict.year_id);
+            await populateSemesterDropdown(strict.year_id, strict.semester_id);
           } else {
-            await populateYearDropdown();
-            const yearSel = document.getElementById('select-year');
-            await populateSemesterDropdown(yearSel?.value || null, null);
+            // fallback
+            const data = await (await fetch('http://localhost:3000/api/term/active')).json();
+            if (data?.success && data.year_id) {
+              await populateYearDropdown(data.year_id);
+              await populateSemesterDropdown(data.year_id, data.semester_id);
+            } else {
+              await populateYearDropdown();
+              const yearSel = document.getElementById('select-year');
+              await populateSemesterDropdown(yearSel?.value || null, null);
+            }
           }
 
           // bind once: changing year reloads semester dropdown
@@ -628,7 +788,7 @@ function toggleModal(modalId) {
           }
         })
         .catch(async err => {
-          console.error('Failed to fetch active term:', err);
+          console.error('Failed to open term modal:', err);
           await populateYearDropdown();
           const yearSel = document.getElementById('select-year');
           await populateSemesterDropdown(yearSel?.value || null, null);
@@ -651,7 +811,7 @@ function getVisibleFeeCheckboxes() {
   return all.filter(cb => cb.offsetParent !== null);
 }
 
-// ✅ UPDATED: fetch payments only for current semester (backend supports ?semester_id=)
+// Fetch payments only for current semester (backend supports ?semester_id=)
 async function fetchStudentPayments(student_id) {
   const termId = Number(window.CURRENT_YEAR_SEMESTER_ID);
   const url = Number.isFinite(termId) && termId > 0
@@ -659,20 +819,22 @@ async function fetchStudentPayments(student_id) {
     : `http://localhost:3000/api/payments/student/${student_id}`;
 
   const res = await fetch(url);
-
   const text = await res.text();
+
   let data;
   try {
     data = JSON.parse(text);
   } catch (_) {
-    throw new Error(`Payment fetch route not found or not returning JSON. Check GET /api/payments/student/:student_id (HTTP ${res.status})`);
+    throw new Error(
+      `Payment fetch route not found or not returning JSON. Check GET /api/payments/student/:student_id (HTTP ${res.status})`
+    );
   }
 
   if (!res.ok || !data.success) throw new Error(data.message || 'Failed to fetch payments');
   return data.payments || [];
 }
 
-// ✅ Receipt renderer: already paid vs current transaction, total only current txn (selection preview)
+// Receipt renderer: already paid vs current transaction, total only current txn (selection preview)
 function renderReceiptWithAlreadyPaid({
   availableFees,
   paidFeeIdsBefore,
@@ -690,7 +852,11 @@ function renderReceiptWithAlreadyPaid({
   if (controlNumber) recTid.innerText = controlNumber;
   if (paymentDate) {
     recDate.innerText = new Date(paymentDate).toLocaleString('en-US', {
-      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   }
 
@@ -738,7 +904,7 @@ function renderReceiptWithAlreadyPaid({
   recTotal.innerText = '₱' + money(total);
 }
 
-// ✅ FIXED: Render receipt using the saved lastReceipt snapshot
+// Render receipt using the saved lastReceipt snapshot
 function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
   const recFeesList = document.getElementById('rec-fees-list');
   const recTotal = document.getElementById('rec-total');
@@ -752,7 +918,11 @@ function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
   recTid.innerText = lastReceipt.controlNumber || '---';
   recDate.innerText = lastReceipt.dateISO
     ? new Date(lastReceipt.dateISO).toLocaleString('en-US', {
-        year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       })
     : '---';
 
@@ -765,6 +935,7 @@ function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
   const lines = [];
   let total = 0;
 
+  // show already paid lines (not in this receipt)
   if (Array.isArray(availableFees) && availableFees.length) {
     for (const fee of availableFees) {
       const feeId = Number(fee.fee_id);
@@ -779,6 +950,7 @@ function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
     }
   }
 
+  // show paid items (this receipt)
   for (const it of (lastReceipt.items || [])) {
     const feeId = Number(it.fee_id);
     const amt = Number(it.amount_paid || 0);
@@ -804,6 +976,39 @@ function renderReceiptFromLastReceipt({ paidFeeIdsBefore, availableFees }) {
   recTotal.innerText = '₱' + money(total);
 }
 
+// Receipt meta helpers
+function clearReceiptMeta() {
+  const recTid = document.getElementById('rec-tid');
+  const recDate = document.getElementById('rec-date');
+  if (recTid) recTid.innerText = '---';
+  if (recDate) recDate.innerText = '---';
+}
+
+function resetLastReceiptSnapshot() {
+  lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
+}
+
+function getPaidFeeIdsForActiveStudent() {
+  const sid = activeStudent?.student_id;
+  return paymentCacheByStudent[sid]?.paidFeeIds || new Set();
+}
+
+function beginNewPaymentSession({ availableFees }) {
+  receiptLocked = false;
+  resetLastReceiptSnapshot();
+  clearReceiptMeta();
+  unlockTotal();
+
+  const paidFeeIds = getPaidFeeIdsForActiveStudent();
+  renderReceiptWithAlreadyPaid({
+    availableFees,
+    paidFeeIdsBefore: paidFeeIds,
+    currentTxnFeeIds: [],
+    controlNumber: null,
+    paymentDate: null
+  });
+}
+
 // Bind PAY button once
 function setupPayButton() {
   const payBtn = document.getElementById('btn-pay-now');
@@ -818,15 +1023,14 @@ function setupPayButton() {
 async function openPayment(studentId) {
   unlockTotal();
 
-  activeStudent = studentDb.find(s => s.student_id === studentId);
+  activeStudent = studentDb.find(s => String(s.student_id) === String(studentId));
   if (!activeStudent) return;
 
   setupPayButton();
   setupReprintControls();
 
   receiptLocked = false;
-  lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
-
+  resetLastReceiptSnapshot();
   resetReprintUI();
 
   const studentName = `${activeStudent.student_firstname} ${activeStudent.student_lastname}`;
@@ -848,6 +1052,7 @@ async function openPayment(studentId) {
     .filter(fee => Number(fee.semester_id) === termId)
     .filter(fee => String(fee.role) === String(studentRole));
 
+  // fetch paid fees for this term
   let payments = [];
   try {
     payments = await fetchStudentPayments(activeStudent.student_id);
@@ -859,6 +1064,7 @@ async function openPayment(studentId) {
   const paidFeeIds = new Set(payments.map(p => Number(p.fee_id)).filter(n => Number.isFinite(n)));
   paymentCacheByStudent[activeStudent.student_id] = { payments, paidFeeIds };
 
+  // populate reprint select
   const reprintSelect = document.getElementById('reprint-select');
   if (reprintSelect) {
     try {
@@ -869,11 +1075,13 @@ async function openPayment(studentId) {
       } else {
         reprintSelect.innerHTML =
           `<option value="">Select a receipt...</option>` +
-          txns.map(t => {
-            const dt = t.payment_date ? new Date(t.payment_date) : null;
-            const label = `${t.control_number} — ${dt ? dt.toLocaleString() : ''} — ₱${money(t.total_amount)}`;
-            return `<option value="${t.control_number}">${label}</option>`;
-          }).join('');
+          txns
+            .map(t => {
+              const dt = t.payment_date ? new Date(t.payment_date) : null;
+              const label = `${t.control_number} — ${dt ? dt.toLocaleString() : ''} — ₱${money(t.total_amount)}`;
+              return `<option value="${t.control_number}">${label}</option>`;
+            })
+            .join('');
       }
     } catch (e) {
       console.warn('fetchStudentTransactions failed:', e.message);
@@ -885,21 +1093,11 @@ async function openPayment(studentId) {
   if (!feesContainer) return console.error('Fees container not found!');
   feesContainer.innerHTML = '';
 
-  const getPaidFeeIdsNow = () =>
-    paymentCacheByStudent[activeStudent.student_id]?.paidFeeIds || paidFeeIds;
+  const getPaidFeeIdsNow = () => paymentCacheByStudent[activeStudent.student_id]?.paidFeeIds || paidFeeIds;
 
   const startNewSelectionSessionIfNeeded = () => {
     if (!receiptLocked) return;
-
-    receiptLocked = false;
-    unlockTotal();
-
-    lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
-
-    const recTid = document.getElementById('rec-tid');
-    const recDate = document.getElementById('rec-date');
-    if (recTid) recTid.innerText = '---';
-    if (recDate) recDate.innerText = '---';
+    beginNewPaymentSession({ availableFees });
   };
 
   if (availableFees.length === 0) {
@@ -937,7 +1135,6 @@ async function openPayment(studentId) {
       } else {
         cb.addEventListener('change', () => {
           startNewSelectionSessionIfNeeded();
-
           calculateTotalFees();
 
           const selectedIds = [...document.querySelectorAll('#fees-container .fee-checkbox:checked')]
@@ -971,10 +1168,7 @@ async function openPayment(studentId) {
     paymentDate: null
   });
 
-  const recTid = document.getElementById('rec-tid');
-  const recDate = document.getElementById('rec-date');
-  if (recTid) recTid.innerText = '---';
-  if (recDate) recDate.innerText = '---';
+  clearReceiptMeta();
 
   document.getElementById('payment-modal')?.classList.remove('hidden');
 }
@@ -1012,24 +1206,22 @@ async function handlePayNow() {
     .filter(fee => Number(fee.semester_id) === termId)
     .filter(fee => String(fee.role) === String(studentRole));
 
-  const paidFeeIdsBefore =
-    paymentCacheByStudent[activeStudent.student_id]?.paidFeeIds || new Set();
+  const paidFeeIdsBefore = paymentCacheByStudent[activeStudent.student_id]?.paidFeeIds || new Set();
 
-  const checked = [...document.querySelectorAll('#fees-container .fee-checkbox:checked')]
-    .filter(cb => !cb.disabled);
+  const checked = [...document.querySelectorAll('#fees-container .fee-checkbox:checked')].filter(cb => !cb.disabled);
 
   if (checked.length === 0) {
     uiAlert('Please select at least one unpaid fee to pay.', 'warning', 'Payment');
     return;
   }
 
-  const selectedItems = checked.map(cb => ({
-    fee_id: Number(cb.getAttribute('data-fee-id')),
-    fee_name: cb.getAttribute('data-fee') || cb.dataset.fee || 'Fee',
-    amount_paid: Number(cb.getAttribute('data-price'))
-  })).filter(x =>
-    Number.isFinite(x.fee_id) && x.fee_id > 0 && Number.isFinite(x.amount_paid)
-  );
+  const selectedItems = checked
+    .map(cb => ({
+      fee_id: Number(cb.getAttribute('data-fee-id')),
+      fee_name: cb.getAttribute('data-fee') || cb.dataset.fee || 'Fee',
+      amount_paid: Number(cb.getAttribute('data-price'))
+    }))
+    .filter(x => Number.isFinite(x.fee_id) && x.fee_id > 0 && Number.isFinite(x.amount_paid));
 
   const feesToPay = selectedItems.map(x => ({ fee_id: x.fee_id, amount_paid: x.amount_paid }));
   if (feesToPay.length === 0) {
@@ -1089,6 +1281,7 @@ async function handlePayNow() {
 
     lockTotal(selectedItems.reduce((s, i) => s + Number(i.amount_paid || 0), 0));
 
+    // refresh paid fees cache
     let payments = [];
     try {
       payments = await fetchStudentPayments(activeStudent.student_id);
@@ -1100,6 +1293,7 @@ async function handlePayNow() {
     const paidFeeIdsAfter = new Set(payments.map(p => Number(p.fee_id)).filter(n => Number.isFinite(n)));
     paymentCacheByStudent[activeStudent.student_id] = { payments, paidFeeIds: paidFeeIdsAfter };
 
+    // disable now-paid checkboxes
     document.querySelectorAll('#fees-container .fee-checkbox').forEach(cb => {
       const feeId = Number(cb.getAttribute('data-fee-id'));
       if (paidFeeIdsAfter.has(feeId)) {
@@ -1112,14 +1306,14 @@ async function handlePayNow() {
 
     calculateTotalFees();
 
+    // update status locally + rerender table
     activeStudent.status_id = data.status_id;
-    const idx = studentDb.findIndex(s => s.student_id === activeStudent.student_id);
+    const idx = studentDb.findIndex(s => String(s.student_id) === String(activeStudent.student_id));
     if (idx !== -1) studentDb[idx].status_id = data.status_id;
 
     renderStudentsTable(studentDb, statusMap, departmentMap, 'student-table-body', 'toggleOfficer', 'openPayment', 'removeStudent');
 
     uiAlert('Payment processed successfully.', 'success', 'Payment Successful');
-
   } catch (err) {
     console.error(err);
     uiAlert(err.message || 'Payment failed.', 'error', 'Payment Failed');
@@ -1172,38 +1366,6 @@ function issueAndPrint() {
   }, 100);
 }
 
-function clearReceiptMeta() {
-  const recTid = document.getElementById('rec-tid');
-  const recDate = document.getElementById('rec-date');
-  if (recTid) recTid.innerText = '---';
-  if (recDate) recDate.innerText = '---';
-}
-
-function resetLastReceiptSnapshot() {
-  lastReceipt = { controlNumber: null, dateISO: null, issuedBy: null, studentName: null, items: [] };
-}
-
-function getPaidFeeIdsForActiveStudent() {
-  const sid = activeStudent?.student_id;
-  return paymentCacheByStudent[sid]?.paidFeeIds || new Set();
-}
-
-function beginNewPaymentSession({ availableFees }) {
-  receiptLocked = false;
-  resetLastReceiptSnapshot();
-  clearReceiptMeta();
-  unlockTotal();
-
-  const paidFeeIds = getPaidFeeIdsForActiveStudent();
-  renderReceiptWithAlreadyPaid({
-    availableFees,
-    paidFeeIdsBefore: paidFeeIds,
-    currentTxnFeeIds: [],
-    controlNumber: null,
-    paymentDate: null
-  });
-}
-
 // ----------------- FILTER STUDENTS -----------------
 window.filterStudents = function filterStudents() {
   const search = (document.getElementById('search-id')?.value || '').toLowerCase().trim();
@@ -1243,5 +1405,5 @@ window.handleManualAdd = handleManualAdd;
 window.handlePayNow = handlePayNow;
 window.removeStudent = removeStudent;
 
-// ✅ make sure HTML onclick="requestUpdateTerm()" works:
+// make sure HTML onclick="requestUpdateTerm()" works:
 window.requestUpdateTerm = window.requestUpdateTerm;

@@ -51,6 +51,7 @@ function renderFees() {
         </tr>`;
         return;
     }
+    
 
     feesDb.forEach((fee, index) => {
         // Convert DB value to friendly text

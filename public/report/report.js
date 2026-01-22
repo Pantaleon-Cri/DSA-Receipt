@@ -9,8 +9,7 @@ let STUDENT_POPULATION = 1000;
 // Fallback fees (will be overwritten by API if /api/fees works)
 // Only NON-OFFICER fees should appear in breakdown (role = "0")
 let activeFees = [
-  { name: "Acad Week Fee", price: 300, role: "0" },
-  { name: "SSG Fee", price: 350, role: "0" }
+  { name: "No Fees", price: 0, role: "0" },
 ];
 
 // Active semester ID (will be fetched from /api/term/active)

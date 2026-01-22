@@ -39,6 +39,7 @@ export function unlockTotal() {
   calculateTotalFees(); // recompute selection total only
 }
 
+
 // Set receipt total explicitly (use this from your receipt renderers if needed)
 export function setReceiptTotal(amountNumber) {
   const n = Number(amountNumber);
