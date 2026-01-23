@@ -193,31 +193,115 @@ async function simulateExcelUpload(event) {
   }
 
   /* ================================
-     NAME SPLITTER
+     NAME NORMALIZER + PARSER
+     Accepts:
+       - "Last, First Middle"  (preferred for your Excel)
+       - "First Middle Last"   (fallback)
+     Normalizes capitalization:
+       "pANTALEON" -> "Pantaleon"
+       "DEL ROSARIO" -> "Del Rosario"
+       "o’connor" -> "O’Connor"
   ================================= */
-  function splitFullName(fullName) {
-    const parts = String(fullName ?? "")
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
 
-    if (parts.length === 0) return { firstName: "", lastName: "" };
-    if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+  const LOWER_PARTICLES = new Set([
+    "de", "del", "dela", "da", "dos", "das", "la", "las", "los", "y",
+    "van", "von", "bin", "binti", "ibn"
+  ]);
 
-    const particles = new Set([
-      "de", "del", "dela", "da", "dos", "das",
-      "van", "von", "bin", "binti", "ibn"
-    ]);
+  function smartCapWord(word) {
+    const w = String(word ?? "").trim();
+    if (!w) return "";
 
-    const last = [parts.pop()];
-    while (parts.length && particles.has(parts[parts.length - 1].toLowerCase())) {
-      last.unshift(parts.pop());
+    // Keep all-caps abbreviations like "III", "IV", "Jr" is handled later
+    if (/^[A-Z]{2,}$/.test(w)) return w;
+
+    // Handle apostrophes / curly apostrophes: O'Connor, Dela Cruz etc.
+    const parts = w.split(/([’'])/); // keep the apostrophe separators
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === "'" || parts[i] === "’") continue;
+      const p = parts[i].toLowerCase();
+      parts[i] = p.charAt(0).toUpperCase() + p.slice(1);
+    }
+    return parts.join("");
+  }
+
+  function normalizeNamePhrase(name) {
+    const cleaned = String(name ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!cleaned) return "";
+
+    // Split by spaces, but keep hyphenated parts and capitalize each side
+    const tokens = cleaned.split(" ").filter(Boolean);
+
+    const out = tokens.map((tok) => {
+      const lower = tok.toLowerCase();
+
+      // common suffixes
+      if (["jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"].includes(lower)) {
+        return lower.toUpperCase().replace(".", "") === "JR" ? "Jr." :
+               lower.toUpperCase().replace(".", "") === "SR" ? "Sr." :
+               lower.toUpperCase(); // II, III, IV...
+      }
+
+      // particles stay lowercase
+      if (LOWER_PARTICLES.has(lower)) return lower;
+
+      // hyphenated names: "anna-marie" -> "Anna-Marie"
+      if (tok.includes("-")) {
+        return tok
+          .split("-")
+          .filter(Boolean)
+          .map(smartCapWord)
+          .join("-");
+      }
+
+      return smartCapWord(tok);
+    });
+
+    // Special-case: if first token is a lowercase particle but it's at the start, capitalize it
+    if (out.length && LOWER_PARTICLES.has(out[0])) {
+      out[0] = smartCapWord(out[0]);
     }
 
-    return {
-      firstName: parts.join(" "),
-      lastName: last.join(" ")
-    };
+    return out.join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  function parseStudentFullName(fullNameRaw) {
+    const raw = String(fullNameRaw ?? "").trim();
+    if (!raw) return { firstName: "", lastName: "" };
+
+    // Preferred format: "Last, First Middle"
+    // Example: "Pantaleon, Crizle" or "Del Rosario, Mark Anthony"
+    if (raw.includes(",")) {
+      const parts = raw.split(",").map(s => s.trim()).filter(Boolean);
+
+      // If the cell has extra commas, treat the first part as last name, the rest as first name
+      const lastPart = parts.shift() || "";
+      const firstPart = parts.join(" ").trim(); // join remaining parts in case there are multiple commas
+
+      const lastName = normalizeNamePhrase(lastPart);
+      const firstName = normalizeNamePhrase(firstPart);
+
+      return { firstName, lastName };
+    }
+
+    // Fallback: "First Middle Last" (space-separated)
+    const pieces = raw.split(/\s+/).filter(Boolean);
+    if (pieces.length === 1) {
+      return { firstName: normalizeNamePhrase(pieces[0]), lastName: "" };
+    }
+
+    // Last name = last token (plus possible particles before it)
+    const lastTokens = [pieces.pop()];
+    while (pieces.length && LOWER_PARTICLES.has(pieces[pieces.length - 1].toLowerCase())) {
+      lastTokens.unshift(pieces.pop());
+    }
+
+    const firstName = normalizeNamePhrase(pieces.join(" "));
+    const lastName = normalizeNamePhrase(lastTokens.join(" "));
+    return { firstName, lastName };
   }
 
   /* ================================
@@ -245,10 +329,7 @@ async function simulateExcelUpload(event) {
         return;
       }
 
-      const rows = XLSX.utils.sheet_to_json(
-        workbook.Sheets[sheetName],
-        { defval: "" }
-      );
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
 
       if (!rows.length) {
         uiAlert("Excel file is empty.", "warning");
@@ -257,7 +338,7 @@ async function simulateExcelUpload(event) {
 
       /* REQUIRED COLUMNS */
       const requiredCols = ["student_id", "student_fullname", "department_id"];
-      const headers = Object.keys(rows[0]);
+      const headers = Object.keys(rows[0] || {});
       const missing = requiredCols.filter(c => !headers.includes(c));
 
       if (missing.length) {
@@ -273,29 +354,40 @@ async function simulateExcelUpload(event) {
         const deptId = parseInt(r.department_id, 10);
         const fullName = String(r.student_fullname ?? "").trim();
 
-        if (!studentId || !deptId || !fullName) {
+        if (!studentId || Number.isNaN(deptId) || !fullName) {
+          console.warn(`[IMPORT] Skipping row ${i + 2}: missing student_id/department_id/student_fullname`, r);
           invalid++;
           return;
         }
 
-        const { firstName, lastName } = splitFullName(fullName);
+        const { firstName, lastName } = parseStudentFullName(fullName);
 
+        // Your DB expects firstname + lastname (lastname can be empty but firstname should exist)
         if (!firstName) {
+          console.warn(`[IMPORT] Skipping row ${i + 2}: could not parse first name from "${fullName}"`, r);
           invalid++;
           return;
         }
+
+        const courseIdRaw = r.course_id ?? null;
+        const statusIdRaw = r.status_id ?? null;
 
         mapped.push({
           student_id: studentId,
           student_firstname: firstName,
           student_lastname: lastName,
           department_id: deptId,
-          course_id: r.course_id ? parseInt(r.course_id, 10) : null,
+          course_id: courseIdRaw !== null && String(courseIdRaw).trim() !== ""
+            ? parseInt(courseIdRaw, 10)
+            : null,
           year_semester_id: Number(window.CURRENT_YEAR_SEMESTER_ID),
-          status_id: r.status_id ? parseInt(r.status_id, 10) : 1,
+          status_id: statusIdRaw !== null && String(statusIdRaw).trim() !== ""
+            ? parseInt(statusIdRaw, 10)
+            : 1,
           is_officer:
-            String(r.is_officer).toLowerCase() === "true" ||
-            r.is_officer === 1
+            String(r.is_officer ?? "").toLowerCase() === "true" ||
+            r.is_officer === 1 ||
+            r.is_officer === true
         });
       });
 
@@ -318,11 +410,27 @@ async function simulateExcelUpload(event) {
         body: JSON.stringify({ students: mapped })
       });
 
-      const text = await res.text();
-      const out = JSON.parse(text);
+      // Safer parsing (prevents "Unexpected token <" when server returns HTML)
+      const contentType = res.headers.get("content-type") || "";
+      const raw = await res.text();
 
-      if (!res.ok || !out.success) {
-        uiAlert(out.message || "Import failed", "error");
+      console.log("[IMPORT] HTTP", res.status, "Content-Type:", contentType);
+      console.log("[IMPORT] Raw response:", raw);
+
+      let out = null;
+      if (contentType.includes("application/json")) {
+        out = raw ? JSON.parse(raw) : null;
+      } else {
+        uiAlert(
+          `Import failed: server returned non-JSON (HTTP ${res.status}).\nCheck endpoint: ${API_BASE}/api/students/import`,
+          "error",
+          "Import Failed"
+        );
+        return;
+      }
+
+      if (!res.ok || !out?.success) {
+        uiAlert(out?.message || `Import failed (HTTP ${res.status}).`, "error");
         return;
       }
 
@@ -331,13 +439,14 @@ async function simulateExcelUpload(event) {
       if (window.loadStudents) await window.loadStudents();
     } catch (err) {
       console.error(err);
-      uiAlert("Unexpected import error.", "error");
+      uiAlert(err?.message || "Unexpected import error.", "error");
     }
   };
 
   reader.readAsArrayBuffer(file);
   event.target.value = "";
 }
+
 
 
 window.simulateExcelUpload = simulateExcelUpload;
