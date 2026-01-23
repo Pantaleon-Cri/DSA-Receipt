@@ -55,6 +55,47 @@ router.get("/", (req, res) => {
 });
 
 /* =========================================================
+   GET REMOVED STUDENTS
+   GET /api/students/removed?year_semester_id=123
+   - If year_semester_id is not provided, uses active semester.
+========================================================= */
+router.get("/removed", (req, res) => {
+  const yearSemesterId = toInt(req.query.year_semester_id);
+
+  const run = (semId) => {
+    if (!semId) {
+      return res.status(400).json({
+        success: false,
+        message: "year_semester_id is required (or set an active semester)",
+        students: []
+      });
+    }
+
+    const sql = `
+      SELECT *
+      FROM student
+      WHERE year_semester_id = ?
+        AND IFNULL(is_removed, 2) = 1
+      ORDER BY student_id ASC
+    `;
+
+    db.query(sql, [semId], (err, rows) => {
+      if (err) return res.status(500).json({ success: false, message: err.message });
+      res.json({ success: true, students: rows });
+    });
+  };
+
+  // If caller passed year_semester_id, use it
+  if (yearSemesterId) return run(yearSemesterId);
+
+  // Otherwise fallback to active semester
+  getActiveSemesterId((err, semId) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    return run(semId);
+  });
+});
+
+/* =========================================================
    GET ACTIVE SEMESTER
 ========================================================= */
 router.get("/active", (req, res) => {

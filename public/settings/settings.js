@@ -468,20 +468,15 @@ async function confirmRestoreStudent() {
 /* =======================
    RESTORE ACTION (POST)
 ======================= */
-async function restoreStudent(student_id) {
-  if (!student_id) return;
-
-  try {
-    await apiPost(RESTORE_STUDENT_POST_URL, { student_id });
-    await loadRemovedStudents();
-  } catch (err) {
-    console.error('restoreStudent error:', err);
-    alert(
-      'Failed to restore student.\n\nCheck:\n' +
-      '- POST /api/students/restore\n' +
-      '- Body must be { student_id }\n'
-    );
+async function restoreStudent(studentId) {
+  if (!window.CURRENT_YEAR_SEMESTER_ID) {
+    throw new Error("No active semester selected.");
   }
+
+  await apiPost("/api/students/restore", {
+    student_id: studentId,
+    year_semester_id: window.CURRENT_YEAR_SEMESTER_ID
+  });
 }
 
 /* =======================
