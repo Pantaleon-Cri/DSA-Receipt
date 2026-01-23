@@ -1,6 +1,22 @@
+/**
+ * login.js (FULL UPDATED — PLAIN TEXT PASSWORD + ROLE-BASED REDIRECT)
+ *
+ * ✅ Uses your existing UI render pattern (state + updateUI)
+ * ✅ Calls POST /api/login with { user_id, password } (plain text)
+ * ✅ Stores loggedUser in localStorage INCLUDING role (role_id in varchar)
+ * ✅ Redirect rules:
+ *    - if role === "1"  -> /dashboard/dashboard.html
+ *    - else             -> /staff/dashboard.html
+ *
+ * NOTE:
+ * - Your input IDs are: #login-id and #login-pass (kept)
+ * - Your backend must return:
+ *   { success: true, user: { user_id, user_firstname, user_lastname, role } }
+ */
+
 const state = {
-  loginError: '',
-  isLoading: false
+  loginError: "",
+  isLoading: false,
 };
 
 function renderLogin() {
@@ -14,8 +30,7 @@ function renderLogin() {
         <div class="bg-blue-600 p-4 rounded-2xl shadow-xl shadow-blue-200 mb-6">
           <!-- Receipt icon (example) -->
           <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-li
-            necap="round" stroke-linejoin="round" d="M9 17v-2h6v2m-6-4v-2h6v2M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2h6v2m-6-4v-2h6v2M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
         </div>
         <h1 class="text-3xl font-black text-slate-800 tracking-tight">DocuMint</h1>
@@ -37,6 +52,7 @@ function renderLogin() {
               placeholder="Enter ID"
               required
               class="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-600 focus:bg-white transition-all font-medium"
+              value=""
             />
           </div>
         </div>
@@ -53,83 +69,147 @@ function renderLogin() {
               placeholder="••••••••"
               required
               class="w-full pl-12 pr-12 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-600 focus:bg-white transition-all font-medium"
+              value=""
             />
           </div>
         </div>
 
         ${
           state.loginError
-            ? `<div class="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2 animate-bounce">
+            ? `<div class="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2">
                  <img src="alert-circle-svgrepo-com.svg" class="w-4 h-4" alt="Error Icon"/>
                  ${state.loginError}
                </div>`
-            : ''
+            : ""
         }
 
         <button type="submit" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all active:scale-[0.97] shadow-xl shadow-blue-200 flex justify-center items-center gap-2">
-          ${state.isLoading ? 'VERIFYING...' : 'LOGIN'}
+          ${state.isLoading ? "VERIFYING..." : "LOGIN"}
         </button>
       </form>
-
-      
 
     </div>
   </div>
   `;
 }
 
-// Handle login
+/* =======================
+   HELPERS
+======================= */
+function redirectByRole(roleValue) {
+  const roleStr = String(roleValue ?? "").trim();
+
+  // role === "1" -> admin dashboard
+  if (roleStr === "1") {
+    window.location.href = "/dashboard/dashboard.html";
+  } else {
+    // everyone else -> staff dashboard
+    window.location.href = "/staff/dashboard/dashboard.html";
+  }
+}
+
+/* =======================
+   HANDLE LOGIN
+======================= */
 function handleLogin(e) {
   e.preventDefault();
-  const userId = document.getElementById('login-id').value;
-  const password = document.getElementById('login-pass').value;
+
+  const userIdRaw = document.getElementById("login-id")?.value?.trim();
+  const password = document.getElementById("login-pass")?.value ?? "";
+
+  if (!userIdRaw || !password) {
+    state.loginError = "Please enter ID and Password";
+    state.isLoading = false;
+    updateUI();
+    return;
+  }
+
+  // Your DB has user_id INT, so enforce numeric
+  if (!/^\d+$/.test(userIdRaw)) {
+    state.loginError = "User ID must be numeric";
+    state.isLoading = false;
+    updateUI();
+    return;
+  }
 
   state.isLoading = true;
+  state.loginError = "";
   updateUI();
 
-  // Send login info to backend
-  fetch('/api/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, password })
+  // Send login info to backend (PLAIN TEXT PASSWORD)
+  fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: Number(userIdRaw),
+      password: password,
+    }),
   })
-  .then(res => res.json())
-  .then(data => {
-    state.isLoading = false;
+    .then(async (res) => {
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = data?.message || "Login failed";
+        throw new Error(msg);
+      }
+      return data;
+    })
+    .then((data) => {
+      state.isLoading = false;
 
-    if (data.success) {
-      state.loginError = '';
+      if (!data?.success || !data?.user) {
+        state.loginError = data?.message || "Invalid ID or Password";
+        updateUI();
+        return;
+      }
+
+      const u = data.user;
+
+      // ✅ Store full user info in localStorage for settings.js
+      // settings.js reads user_firstName/user_lastName sometimes, so include BOTH styles
+      localStorage.setItem(
+        "loggedUser",
+        JSON.stringify({
+          user_id: u.user_id,
+          user_firstname: u.user_firstname,
+          user_lastname: u.user_lastname,
+
+          user_firstName: u.user_firstname, // compatibility with your current settings.js
+          user_lastName: u.user_lastname,   // compatibility
+
+          role: String(u.role ?? ""),       // role_id stored in varchar
+          role_id: String(u.role ?? ""),    // optional compatibility
+          role_name: u.role_name ?? null,   // optional if backend sends it
+        })
+      );
+
+      state.loginError = "";
       updateUI();
 
-      // ✅ Store the full user info in localStorage
-      localStorage.setItem('loggedUser', JSON.stringify({
-        user_id: data.user.user_id,
-        user_firstName: data.user.user_firstName,
-        user_lastName: data.user.user_lastName
-      }));
-
-      // Redirect to dashboard
-      window.location.href = "../dashboard/dashboard.html";
-    } else {
-      state.loginError = data.message || "Invalid ID or Password";
+      // ✅ Redirect based on role
+      redirectByRole(u.role);
+    })
+    .catch((err) => {
+      console.error(err);
+      state.isLoading = false;
+      state.loginError = err?.message || "Server error, try again later";
       updateUI();
-    }
-  })
-  .catch(err => {
-    state.isLoading = false;
-    state.loginError = "Server error, try again later";
-    updateUI();
-    console.error(err);
-  });
+    });
 }
 
-
-
-// Update UI
+/* =======================
+   UPDATE UI
+======================= */
 function updateUI() {
-  document.getElementById('app').innerHTML = renderLogin();
-  document.getElementById('login-form').addEventListener('submit', handleLogin);
+  const app = document.getElementById("app");
+  if (!app) return;
+
+  app.innerHTML = renderLogin();
+
+  const form = document.getElementById("login-form");
+  if (form) form.addEventListener("submit", handleLogin);
 }
 
-// Initial render
-document.addEventListener('DOMContentLoaded', updateUI);
+/* =======================
+   INIT
+======================= */
+document.addEventListener("DOMContentLoaded", updateUI);
