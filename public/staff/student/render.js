@@ -54,7 +54,7 @@ export function renderStudentsTable(
           <div class="flex justify-center items-center">
             <label class="switch m-0">
              <input type="checkbox" ${officerChecked} disabled>
-              <span class="slider round"></span>
+              <span class="slider round hover:bg-slate-101 transition cursor-not-allowed"></span>
             </label>
           </div>
         </td>

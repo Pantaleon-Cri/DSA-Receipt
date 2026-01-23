@@ -357,14 +357,18 @@ async function removeStudent(studentId) {
     uiAlert("Cannot delete this student because the status is PAID.", "warning", "Delete Blocked");
     return;
   }
+const fullName = student
+  ? `${student.student_firstname} ${student.student_lastname}`.trim()
+  : "this student";
 
-  const ok = await uiConfirm({
-    title: "Delete Student",
-    subtitle: "This will perform a soft delete.",
-    message: `Delete/Remove student ${studentId}?`,
-    okText: "Yes, Delete",
-    okClass: "bg-red-600 hover:bg-red-700"
-  });
+const ok = await uiConfirm({
+  title: "Delete Student",
+  subtitle: "This will perform a soft delete.",
+  message: `Remove ${fullName} with ID ${studentId}?`,
+  okText: "Yes, Delete",
+  okClass: "bg-red-600 hover:bg-red-700"
+});
+
   if (!ok) return;
 
   try {

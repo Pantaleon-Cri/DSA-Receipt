@@ -105,10 +105,10 @@
           <!-- Search & Filters -->
           <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div class="md:col-span-2">
-              <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Search Student ID</label>
+              <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Search Student Name or ID</label>
               <div class="relative">
                 <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-                <input id="search-id" oninput="filterStudents()" type="text" placeholder="Ex: 2025-0001" class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none transition-all">
+                <input id="search-id" oninput="filterStudents()" type="text" placeholder="Ex: John or 2025-0001" class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none transition-all">
               </div>
             </div>
 
@@ -310,16 +310,16 @@
       <form id="form-add-student" class="p-6 space-y-4">
         <div>
           <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Student ID</label>
-          <input type="text" name="sid" required placeholder="2025-XXXX" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
+          <input type="text" name="sid" required placeholder="2026001" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">First Name</label>
-            <input type="text" name="fname" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
+            <input type="text" placeholder="John" name="fname" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
           </div>
           <div>
             <label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Last Name</label>
-            <input type="text" name="lname" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
+            <input type="text" placeholder="Doe" name="lname" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500">
           </div>
         </div>
         <div>
