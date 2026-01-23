@@ -50,11 +50,11 @@
         </nav>
 
         <div class="mt-auto p-4 space-y-2">
-            <button onclick="window.location.href='../settings.html'" class="w-full flex items-center gap-4 p-3 text-blue-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-bold transition-all">
+            <button onclick="window.location.href='../settings/settings.html'" class="w-full flex items-center gap-4 p-3 text-blue-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-bold transition-all">
                 <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
                 <span class="sidebar-text">Settings</span>
             </button>
-            <button onclick="window.location.href='../login.html'" class="w-full flex items-center gap-4 p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl font-bold transition-all">
+            <button onclick="window.location.href='/login/login.html'" class="w-full flex items-center gap-4 p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl font-bold transition-all">
                 <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
                 <span class="sidebar-text">Log Out</span>
             </button>
@@ -67,7 +67,7 @@
                 </div>
                 <div class="sidebar-text overflow-hidden">
                     <p id="user-role" class="text-xs font-black text-slate-900 truncate">ADMINISTRATOR</p>
-                    <p class="text-[10px] text-blue-600 font-bold uppercase truncate">Administrator</p>
+                    <p class="text-[10px] text-blue-600 font-bold uppercase truncate">Staff</p>
                 </div>
             </div>
         </div>
@@ -87,9 +87,7 @@
                             <h1 class="text-2xl font-black text-slate-900">Fees Management</h1>
                             <p id="active-term" class="text-sm text-slate-500 font-medium">Loading...</p>
                         </div>
-                        <button onclick="openFeeEditor()" class="px-6 py-3 bg-slate-900 text-white text-xs font-black uppercase rounded-xl flex items-center gap-2 hover:bg-blue-600 transition-all">
-                            <i data-lucide="plus" class="w-4 h-4"></i> Add New Fee
-                        </button>
+                        
                     </header>
 
                     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -99,7 +97,7 @@
                                     <th class="px-6 py-4">Fee Description</th>
                                     <th class="px-6 py-4">Amount</th>
                                     <th class="px-6 py-4">Role</th>
-                                    <th class="px-6 py-4 text-right">Actions</th>
+                                    
                                 </tr>
                             </thead>
                             <tbody id="fee-table-body" class="divide-y divide-slate-100"></tbody>
@@ -112,41 +110,12 @@
         </main>
     </div>
 
-    <!-- FEE EDITOR MODAL -->
-    <div id="fee-editor-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8">
-            <h3 id="fee-modal-title" class="text-xl font-black text-slate-900 mb-6">Add New Fee</h3>
-            <input type="hidden" id="edit-fee-index">
-            <div class="space-y-4">
-    <div>
-        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Fee Name</label>
-        <input id="fee-name-input" type="text" placeholder="e.g. Graduation Fee" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600">
-    </div>
-    <div>
-        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Amount (₱)</label>
-        <input id="fee-amount-input" type="number" placeholder="0.00" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600 font-mono">
-    </div>
-    <div>
-        <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block">Role</label>
-        <select id="fee-role-select" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-600">
-            <option value="1">For Officer</option>
-            <option value="0">For Non-Officer</option>
-        </select>
-    </div>
-</div>
+    
 
-            <div class="mt-8 flex gap-3">
-                <button onclick="closeFeeEditor()" class="flex-1 py-3 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">CANCEL</button>
-                <button onclick="saveFee()" class="flex-2 px-8 py-3 bg-blue-600 text-white font-black rounded-xl shadow-lg shadow-blue-200 hover:scale-[1.02] transition-all uppercase tracking-tight text-sm">SAVE FEE</button>
-            </div>
-        </div>
-    </div>
-
-</div>
-
+           
 <!-- Scripts -->
 <script src="add_fees.js"></script>
-<script src="../log_user.js"></script>
+<script src="/log_user.js"></script>
 <script>
     // Initialize Lucide icons
     document.addEventListener("DOMContentLoaded", () => {

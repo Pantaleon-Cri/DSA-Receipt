@@ -20,7 +20,7 @@ export function renderStudentsTable(
   tbodyId,
   toggleOfficerFn,
   openPaymentFn,
-  removeStudentFn = 'removeStudent' // ✅ NEW (default keeps backward compatibility)
+  
 ) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
@@ -53,7 +53,7 @@ export function renderStudentsTable(
         <td class="px-6 py-4 text-center">
           <div class="flex justify-center items-center">
             <label class="switch m-0">
-              <input type="checkbox" ${officerChecked} onchange="${toggleOfficerFn}('${s.student_id}', this.checked)">
+             <input type="checkbox" ${officerChecked} disabled>
               <span class="slider round"></span>
             </label>
           </div>
@@ -74,15 +74,8 @@ export function renderStudentsTable(
               PROCESS
             </button>
 
-            <!-- ✅ DELETE ICON -->
-            <button
-              type="button"
-              onclick="${removeStudentFn}('${s.student_id}')"
-              class="p-2 rounded-lg border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200 transition"
-              title="Delete Student"
-            >
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
+        
+            
           </div>
         </td>
       </tr>

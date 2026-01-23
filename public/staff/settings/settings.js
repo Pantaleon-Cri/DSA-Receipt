@@ -404,15 +404,7 @@ function renderRemovedStudents() {
             Removed
           </span>
         </td>
-        <td class="px-8 py-4 text-right">
-          <button
-            class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
-            title="Restore student"
-            onclick="openRestoreStudentModal('${escapeAttr(s.student_id)}')"
-          >
-            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-          </button>
-        </td>
+       
       </tr>
     `;
   }).join('');
@@ -708,16 +700,7 @@ function renderAcademicPaginated() {
         </span>
       </td>
       <td class="px-8 py-4 font-black text-slate-400 text-[10px]">${escapeHtml(a.parent)}</td>
-      <td class="px-8 py-4 text-right">
-        <button
-          onclick="openEditAcademic('${escapeAttr(a.id)}')"
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase hover:bg-blue-600 transition-all"
-          title="Edit"
-        >
-          <i data-lucide="pencil" class="w-4 h-4"></i>
-          Edit
-        </button>
-      </td>
+      
     </tr>
   `).join('');
 

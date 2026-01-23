@@ -66,12 +66,7 @@ function renderFees() {
                     ₱${Number(fee.fee_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
                 <td class="px-6 py-4 font-bold text-slate-800">${roleText}</td>
-                <td class="px-6 py-4 text-right space-x-2">
-                    <button onclick="openFeeEditor(${index})" class="p-2 text-slate-400 hover:text-blue-600 transition-colors">
-                        <i data-lucide="edit-3" class="w-4 h-4"></i>
-                    </button>
-                    
-                </td>
+                
             </tr>
         `;
     });

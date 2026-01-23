@@ -55,7 +55,7 @@
         </button>
 
         <!-- Log Out Button -->
-        <button onclick="window.location.href='login.html'" class="w-full flex items-center gap-4 p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl font-bold transition-all">
+        <button onclick="window.location.href='/login/login.html'" class="w-full flex items-center gap-4 p-3 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl font-bold transition-all">
           <i data-lucide="log-out" class="w-5 h-5 shrink-0"></i>
           <span class="sidebar-text">Log Out</span>
         </button>
@@ -85,21 +85,7 @@
               <p id="active-term" class="text-sm text-slate-500 font-medium">Loading...</p>
             </div>
 
-            <div class="flex gap-2">
-              <button onclick="toggleModal('modal-semester')" class="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase hover:bg-slate-50 flex items-center gap-2">
-                <i data-lucide="calendar" class="w-4 h-4"></i> Manage Semester
-              </button>
-
-              <button onclick="toggleModal('modal-add-student')" class="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase hover:bg-blue-600 flex items-center gap-2 shadow-lg shadow-slate-200 transition-all">
-                <i data-lucide="user-plus" class="w-4 h-4"></i> Add Student
-              </button>
-
-              <!-- ✅ UPDATED: keep input OUTSIDE the button, and keep your onchange -->
-              <button type="button" onclick="document.getElementById('excel-file').click()" class="px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-black uppercase hover:bg-green-700 flex items-center gap-2 shadow-lg shadow-green-100 transition-all">
-                <i data-lucide="file-up" class="w-4 h-4"></i> Import Excel
-              </button>
-              <input type="file" id="excel-file" class="hidden" accept=".csv, .xlsx, .xls" onchange="simulateExcelUpload(event)">
-            </div>
+           
           </header>
 
           <!-- Search & Filters -->
@@ -570,7 +556,7 @@
   <!-- ✅ IMPORTANT: load modal helpers BEFORE log_user.js so confirm works -->
   <script src="modal.js" defer></script>
   <script src="../student_modal.js" defer></script>
-  <script src="../log_user.js" defer></script>
+  <script src="/log_user.js" defer></script>
 
 </body>
 </html>
