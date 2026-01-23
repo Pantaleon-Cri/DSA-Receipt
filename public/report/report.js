@@ -6,6 +6,9 @@ let currentSelection = "";
 // IMPORTANT: must be let (not const) because we will overwrite it from API
 let STUDENT_POPULATION = 1000;
 
+// ✅ Logged in user name (for Excel "Received By")
+let CURRENT_USER_NAME = "";
+
 // Fallback fees (will be overwritten by API if /api/fees works)
 // Only NON-OFFICER fees should appear in breakdown (role = "0")
 let activeFees = [
@@ -32,6 +35,54 @@ async function fetchJSON(url) {
     throw new Error(data?.message || `Request failed: ${res.status}`);
   }
   return data;
+}
+
+// ✅ Read logged user from localStorage (matches your log_user.js)
+function getLoggedUserFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem("loggedUser");
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.warn("[USER] Failed to parse loggedUser from localStorage:", e);
+    return null;
+  }
+}
+
+// ✅ Build a display name from your stored user object
+function buildUserDisplayName(user) {
+  if (!user) return "";
+
+  // Try common keys (based on your log_user.js)
+  const first =
+    user.user_firstName ??
+    user.user_firstname ??
+    user.first_name ??
+    user.firstname ??
+    "";
+
+  const last =
+    user.user_lastName ??
+    user.user_lastname ??
+    user.last_name ??
+    user.lastname ??
+    "";
+
+  const full =
+    user.fullname ??
+    user.full_name ??
+    user.name ??
+    "";
+
+  // Prefer first+last if present, else fallback to fullname/name
+  const name = `${String(first).trim()} ${String(last).trim()}`.trim();
+  return name || String(full).trim() || "";
+}
+
+// ✅ Optional fallback: fetch from API if you later add sessions
+async function fetchCurrentUserFromApi() {
+  // If you *do* have sessions later, this will work.
+  // Right now, it returns 401 because you’re not using sessions.
+  return await fetchJSON("/api/users/me");
 }
 
 // Active term: should return semester_id + student_population
@@ -170,16 +221,37 @@ async function generateReport() {
   setLoadingState(true);
 
   try {
+    // 0) Ensure we have CURRENT_USER_NAME
+    // ✅ Primary source: localStorage (because that’s what your system uses)
+    if (!CURRENT_USER_NAME) {
+      const user = getLoggedUserFromLocalStorage();
+      CURRENT_USER_NAME = buildUserDisplayName(user);
+    }
+
+    // Optional fallback: try API (won’t break export if it fails)
+    if (!CURRENT_USER_NAME) {
+      try {
+        const me = await fetchCurrentUserFromApi();
+        CURRENT_USER_NAME =
+          me?.user?.name ||
+          (me?.user?.user_firstname || me?.user?.user_lastname
+            ? `${me.user.user_firstname || ""} ${me.user.user_lastname || ""}`.trim()
+            : "") ||
+          me?.name ||
+          "";
+      } catch (e) {
+        console.warn("User fetch failed, continuing without name:", e?.message || e);
+      }
+    }
+
     // 1) Get active semester + population
     const active = await fetchActiveTerm();
     ACTIVE_SEMESTER_ID = Number(active.semester_id || 1);
 
-    // If backend doesn't return population yet, this will fallback to previous value
     const pop = Number(active.student_population);
     if (!Number.isNaN(pop)) STUDENT_POPULATION = pop;
 
-    // 2) Load NON-OFFICER fees for that active semester
-    // If it fails, fallback fees remain.
+    // 2) Load NON-OFFICER fees
     try {
       const feesFromApi = await fetchFeesNonOfficer(ACTIVE_SEMESTER_ID);
       if (feesFromApi.length > 0) {
@@ -191,7 +263,7 @@ async function generateReport() {
       console.warn("Fees fetch failed, using fallback activeFees:", e?.message || e);
     }
 
-    // 3) Fetch transactions report (DATE ONLY, not semester-bound)
+    // 3) Fetch transactions report
     const api = await fetchReportTransactions({
       interval: range,
       target: selection
@@ -199,18 +271,14 @@ async function generateReport() {
 
     currentReportData = normalizeTransactions(api.transactions);
 
-    // UI labels + show controls
     document.getElementById("log-date-display").innerText = `Period: ${selection.toUpperCase()}`;
 
-    // ✅ show export + search bar (added in HTML)
     document.getElementById("download-btn")?.classList.remove("hidden");
     document.getElementById("report-search-wrap")?.classList.remove("hidden");
 
-    // ✅ clear search each time you compile
     const searchInput = document.getElementById("report-search");
     if (searchInput) searchInput.value = "";
 
-    // ---- render table ----
     const tbody = document.getElementById("transaction-table-body");
     tbody.innerHTML = "";
 
@@ -241,7 +309,6 @@ async function generateReport() {
       });
     }
 
-    // ---- render stats ----
     const statsGrid = document.getElementById("dynamic-stats-grid");
     statsGrid.innerHTML = "";
 
@@ -388,7 +455,6 @@ function downloadExcel() {
   const range = document.getElementById("report-range").value;
   const selection = document.getElementById(`date-picker-${range}`).value;
 
-  // Fee totals based on txn.fee (comma-separated names)
   const feeTotals = new Map();
   activeFees.forEach(f => feeTotals.set(f.name, 0));
 
@@ -476,10 +542,13 @@ function downloadExcel() {
   const ackTitleRow = bRows.length + 1;
 
   bRows.push(["Received By:", "", "", "", "", "", ""]);
+  bRows.push([CURRENT_USER_NAME || "", "", "", "", "", "", ""]);
   bRows.push(["", "", "", "", "", "", ""]);
+
   bRows.push(["COLLECTION STAFF", "", "", "", "", "", ""]);
   bRows.push(["OSAD STAFF", "", "", "", "", "", ""]);
   bRows.push(["", "", "", "", "", "", ""]);
+
   bRows.push(["Certified By:", "", "", "", "", "", ""]);
   bRows.push(["", "", "", "", "", "", ""]);
   bRows.push(["ADMINISTRATIVE ASST.", "", "", "", "", "", ""]);
@@ -530,6 +599,12 @@ function downloadExcel() {
     setStyle(wsB, addr2, { border: { bottom: { style: "thin", color: { rgb: "94A3B8" } } } });
   });
 
+  const receivedNameRow = ackTitleRow + 1;
+  ["A", "B", "C"].forEach(col => {
+    const addr = `${col}${receivedNameRow}`;
+    setStyle(wsB, addr, { font: { bold: true }, alignment: { horizontal: "center", vertical: "center" } });
+  });
+
   if (wsLog["A1"]) {
     wsLog["A1"].s = {
       font: { bold: true, color: { rgb: "FFFFFF" } },
@@ -550,12 +625,30 @@ function handleLogout() {
   location.reload();
 }
 
-window.onload = () => {
+window.onload = async () => {
   lucide.createIcons();
 
-  // make sure search bar starts hidden/clean (it will show after compile)
   const searchInput = document.getElementById("report-search");
   if (searchInput) searchInput.value = "";
+
+  // ✅ preload from localStorage
+  const user = getLoggedUserFromLocalStorage();
+  CURRENT_USER_NAME = buildUserDisplayName(user);
+
+  // Optional fallback to API
+  if (!CURRENT_USER_NAME) {
+    try {
+      const me = await fetchCurrentUserFromApi();
+      CURRENT_USER_NAME =
+        me?.user?.name ||
+        (me?.user?.user_firstname || me?.user?.user_lastname
+          ? `${me.user.user_firstname || ""} ${me.user.user_lastname || ""}`.trim()
+          : "") ||
+        "";
+    } catch (e) {
+      console.warn("Could not preload current user name:", e?.message || e);
+    }
+  }
 };
 
 // --- Sidebar State ---
