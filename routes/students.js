@@ -2,6 +2,122 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 
+
+router.post("/import", (req, res) => {
+  const students = Array.isArray(req.body?.students) ? req.body.students : null;
+  if (!students || students.length === 0) {
+    return res.status(400).json({ success: false, message: "No students provided", uploaded: 0, skipped: 0 });
+  }
+
+  getActiveSemesterId((err, activeSemesterId) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!activeSemesterId) {
+      return res.status(400).json({ success: false, message: "No active semester found", uploaded: 0, skipped: 0 });
+    }
+
+    const rows = [];
+    const invalid = [];
+
+    for (const s of students) {
+      const sid = String(s.student_id ?? "").trim();
+      const fn = String(s.student_firstname ?? "").trim();
+      const ln = String(s.student_lastname ?? "").trim();
+      const dept = toInt(s.department_id);
+
+      // allow optional fields in import
+      const course = toInt(s.course_id); // keep NULL if blank
+      const status = toInt(s.status_id) ?? 1;
+      const isOfficer = toTinyIntBool(s.is_officer);
+
+      if (!sid || !fn || !ln || dept === null) {
+        invalid.push(sid || "(missing id)");
+        continue;
+      }
+
+      rows.push({
+        student_id: sid,
+        year_semester_id: activeSemesterId,
+        student_firstname: fn,
+        student_lastname: ln,
+        department_id: dept,
+        course_id: course, // may be null (depends on DB schema)
+        status_id: status,
+        is_officer: isOfficer
+      });
+    }
+
+    if (rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid student rows to import",
+        uploaded: 0,
+        skipped: 0,
+        invalid_rows: invalid.length
+      });
+    }
+
+    const insertSql = `
+      INSERT IGNORE INTO student
+        (student_id, year_semester_id, student_firstname, student_lastname, department_id, course_id, status_id, is_removed, is_officer)
+      VALUES ?
+    `;
+
+    const values = rows.map((r) => [
+      r.student_id,
+      r.year_semester_id,
+      r.student_firstname,
+      r.student_lastname,
+      r.department_id,
+      r.course_id,
+      r.status_id,
+      2, // active/restored
+      r.is_officer
+    ]);
+
+    db.query(insertSql, [values], (err, result) => {
+      if (err) return res.status(500).json({ success: false, message: err.message });
+
+      const inserted = result?.affectedRows ?? 0;
+      const attempted = values.length;
+      const skipped = Math.max(0, attempted - inserted);
+
+      const ids = rows.map((r) => r.student_id);
+
+      const restoreSql = `
+        UPDATE student
+        SET is_removed = 2
+        WHERE year_semester_id = ?
+          AND student_id IN (?)
+          AND IFNULL(is_removed, 2) = 1
+      `;
+
+      db.query(restoreSql, [activeSemesterId, ids], (err2, restoreResult) => {
+        if (err2) {
+          return res.json({
+            success: true,
+            message: "Import completed, but restore step failed.",
+            uploaded: inserted,
+            skipped,
+            restored: 0,
+            invalid_rows: invalid.length,
+            restore_error: err2.message
+          });
+        }
+
+        const restored = restoreResult?.affectedRows ?? 0;
+
+        return res.json({
+          success: true,
+          message: "Students imported successfully",
+          uploaded: inserted,
+          skipped,
+          restored,
+          invalid_rows: invalid.length
+        });
+      });
+    });
+  });
+});
 /* =========================================================
    HELPERS
 ========================================================= */
