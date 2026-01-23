@@ -371,7 +371,7 @@ async function removeStudent(studentId) {
     const res = await fetch("http://localhost:3000/api/students/remove", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ student_id: studentId })
+      body: JSON.stringify({ student_id: studentId,year_semester_id: Number(window.CURRENT_YEAR_SEMESTER_ID) })
     });
 
     const text = await res.text();
@@ -569,7 +569,7 @@ async function handleManualAdd(e) {
 // ----------------- TOGGLE OFFICER -----------------
 async function toggleOfficer(studentId, isChecked) {
   try {
-    const data = await toggleOfficerStatus(studentId, isChecked);
+    const data = await toggleOfficerStatus(studentId, isChecked, window.CURRENT_YEAR_SEMESTER_ID);
     if (!data.success) uiAlert("Failed to update officer status: " + data.message, "error", "Update Failed");
     await loadStudents();
   } catch (err) {

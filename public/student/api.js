@@ -100,20 +100,35 @@ export async function addStudent(payload) {
   }
 }
 
-
-export async function toggleOfficerStatus(studentId, isOfficer) {
+export async function toggleOfficerStatus(studentId, isOfficer, yearSemesterId = window.CURRENT_YEAR_SEMESTER_ID) {
   try {
-    const res = await fetch('http://localhost:3000/api/students/toggle-officer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_id: studentId, is_officer: isOfficer })
+    const res = await fetch("http://localhost:3000/api/students/toggle-officer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_id: studentId,
+        year_semester_id: Number(yearSemesterId), // ✅ scope to current semester
+        is_officer: isOfficer
+      })
     });
-    return await res.json();
+
+    const text = await res.text();
+
+    // safer: catches non-JSON responses
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {
+        success: false,
+        message: `Toggle officer route not returning JSON (HTTP ${res.status}). Response: ${text?.slice(0, 200) || ""}`
+      };
+    }
   } catch (err) {
-    console.error('Failed to toggle officer status', err);
-    return { success: false, message: err.message };
+    console.error("Failed to toggle officer status", err);
+    return { success: false, message: err.message || String(err) };
   }
 }
+
 
 export async function updateTerm(payload) {
   try {
