@@ -1,5 +1,5 @@
 /**
- * settings.js (FULL, UPDATED — REMOVED STUDENTS + RESTORE CONFIRMATION MODAL via POST)
+ * settings.js (FULL, UPDATED — ADDED CHANGE PASSWORD SUPPORT)
  *
  * ✅ Academic Structure pagination is LIMITED to 5 rows per page.
  * ✅ Staff role handling FIXED to match YOUR schema:
@@ -14,7 +14,12 @@
  *    - Lists ONLY students with is_removed = 1
  *    - ✅ Bound to ACTIVE semester by backend route: GET /api/students/removed
  *    - ✅ Restore uses POST /api/students/restore (sets is_removed = 2)
- *    - ✅ NEW: Restore confirmation modal (uses #restore-student-modal in your HTML)
+ *    - ✅ Restore confirmation modal supported (if your HTML has it)
+ *
+ * ✅ NEW: Change Password (PLAIN TEXT, NO BCRYPT)
+ *    - Uses your backend route: PATCH /api/users/:id/password
+ *    - Sends: { password: "newPasswordPlainText" }
+ *    - Uses user_id from #acc-id or localStorage loggedUser fallback
  *
  * REQUIRED ENDPOINTS:
  * - GET   /api/roles
@@ -29,7 +34,10 @@
  *
  * REMOVED STUDENTS ENDPOINTS (YOUR BACKEND):
  * - GET   /api/students/removed
- * - POST  /api/students/restore   (expects { student_id })
+ * - POST  /api/students/restore
+ *
+ * PASSWORD ENDPOINT (YOUR BACKEND):
+ * - PATCH /api/users/:id/password   body: { password }
  */
 
 let sidebarExpanded = true;
@@ -40,6 +48,11 @@ let selectedAcademicType = 'department';
 ======================= */
 const REMOVED_STUDENTS_GET_URL = '/api/students/removed';
 const RESTORE_STUDENT_POST_URL = '/api/students/restore';
+
+/* =======================
+   CONFIG (PASSWORD)
+======================= */
+const CHANGE_PASSWORD_URL = (userId) => `/api/users/${encodeURIComponent(userId)}/password`;
 
 /* =======================
    API HELPERS
@@ -77,6 +90,24 @@ async function apiPut(url, body) {
     throw new Error(`PUT ${url} failed: ${res.status} ${text}`);
   }
   return res.json();
+}
+
+async function apiPatch(url, body) {
+  const hasBody = body !== undefined;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: hasBody ? { 'Content-Type': 'application/json' } : undefined,
+    body: hasBody ? JSON.stringify(body) : undefined,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`PATCH ${url} failed: ${res.status} ${text}`);
+  }
+  // some backends return empty body; try json then fallback
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return res.json();
+  return { success: true };
 }
 
 function escapeHtml(str) {
@@ -127,13 +158,21 @@ function getLoggedUser() {
   }
 }
 
+function getLoggedUserId() {
+  const u = getLoggedUser();
+  const idVal = u?.user_id ?? u?.userId ?? u?.id ?? u?.userID ?? '';
+  return String(idVal ?? '').trim();
+}
+
 function applyLoggedUserToUI() {
   const user = getLoggedUser();
   if (!user) return;
 
   const sidebarNameEl = document.getElementById('user-role');
   if (sidebarNameEl) {
-    const fullName = `${user.user_firstName ?? ''} ${user.user_lastName ?? ''}`.trim();
+    const fn = user.user_firstname ?? user.user_firstName ?? user.first_name ?? '';
+    const ln = user.user_lastname ?? user.user_lastName ?? user.last_name ?? '';
+    const fullName = `${fn} ${ln}`.trim();
     sidebarNameEl.textContent = fullName || '';
   }
 
@@ -145,13 +184,14 @@ function applyLoggedUserToUI() {
 
   const accName = document.getElementById('acc-name');
   if (accName) {
-    accName.value = `${user.user_firstName ?? ''} ${user.user_lastName ?? ''}`.trim();
+    const fn = user.user_firstname ?? user.user_firstName ?? user.first_name ?? '';
+    const ln = user.user_lastname ?? user.user_lastName ?? user.last_name ?? '';
+    accName.value = `${fn} ${ln}`.trim();
   }
 
   const accId = document.getElementById('acc-id');
   if (accId) {
-    const idVal = user.user_id ?? user.userId ?? user.id ?? '';
-    accId.value = idVal;
+    accId.value = getLoggedUserId();
   }
 }
 
@@ -312,7 +352,7 @@ async function saveStaff() {
     await apiPost('/api/users', {
       user_id: Number(userIdRaw),
       fullname,
-      password,
+      password, // ✅ plaintext
       role: String(roleIdRaw)
     });
 
@@ -335,9 +375,6 @@ async function saveStaff() {
 
 /* =======================
    STUDENT MANAGEMENT (REMOVED)
-   ✅ UI columns: Student | Student ID | Department | Status | Actions
-   ✅ Restore uses POST /api/students/restore
-   ✅ NEW: confirmation modal
 ======================= */
 async function loadRemovedStudents() {
   const tbody = document.getElementById('removed-students-table-body');
@@ -404,7 +441,6 @@ function renderRemovedStudents() {
             Removed
           </span>
         </td>
-       
       </tr>
     `;
   }).join('');
@@ -413,12 +449,7 @@ function renderRemovedStudents() {
 }
 
 /* =======================
-   RESTORE CONFIRMATION MODAL
-   Requires HTML IDs:
-   - restore-student-modal
-   - restore-student-name
-   - restore-student-id
-   - restore-student-dept
+   RESTORE CONFIRMATION MODAL (OPTIONAL)
 ======================= */
 let pendingRestoreStudentId = null;
 
@@ -465,7 +496,7 @@ async function restoreStudent(studentId) {
     throw new Error("No active semester selected.");
   }
 
-  await apiPost("/api/students/restore", {
+  await apiPost(RESTORE_STUDENT_POST_URL, {
     student_id: studentId,
     year_semester_id: window.CURRENT_YEAR_SEMESTER_ID
   });
@@ -484,7 +515,6 @@ async function loadDepartments() {
     renderDepartmentSelect();
     await loadAcademic();
 
-    // load removed students after departments loaded (for dept mapping)
     await loadRemovedStudents();
   } catch (err) {
     console.error('loadDepartments error:', err);
@@ -700,7 +730,6 @@ function renderAcademicPaginated() {
         </span>
       </td>
       <td class="px-8 py-4 font-black text-slate-400 text-[10px]">${escapeHtml(a.parent)}</td>
-      
     </tr>
   `).join('');
 
@@ -859,9 +888,74 @@ function toggleModal(id) {
   }
 }
 
-function updateAccount(e) {
+/* =======================
+   ACCOUNT: CHANGE PASSWORD
+   - Uses #acc-id for user_id
+   - Uses #acc-new-pass and #acc-confirm-pass if present
+   - If your HTML uses different IDs, rename below OR tell me your HTML ids.
+======================= */
+async function updateAccount(e) {
   e.preventDefault();
-  alert('Account update is not connected yet. Add a backend PATCH route to save changes.');
+
+  const userIdRaw = (document.getElementById('acc-id')?.value ?? '').trim() || getLoggedUserId();
+  const newPassEl =
+    document.getElementById('acc-new-pass') ||
+    document.getElementById('acc-pass') ||
+    document.getElementById('new-password') ||
+    document.getElementById('password');
+
+  const confirmEl =
+    document.getElementById('acc-confirm-pass') ||
+    document.getElementById('confirm-password') ||
+    document.getElementById('password-confirm');
+
+  const newPassword = (newPassEl?.value ?? '').trim();
+  const confirmPassword = (confirmEl?.value ?? '').trim();
+
+  if (!userIdRaw) {
+    alert('Missing user_id. Make sure #acc-id is filled.');
+    return;
+  }
+
+  if (!/^\d+$/.test(String(userIdRaw))) {
+    alert('User ID must be numeric because user_id is INT in your database.');
+    return;
+  }
+
+  if (!newPassword) {
+    alert('Please enter your new password.');
+    newPassEl?.focus?.();
+    return;
+  }
+
+  // Only validate confirm if confirm input exists
+  if (confirmEl && confirmPassword !== newPassword) {
+    alert('New password and confirm password do not match.');
+    confirmEl?.focus?.();
+    return;
+  }
+
+  try {
+    const resp = await apiPatch(CHANGE_PASSWORD_URL(userIdRaw), { password: newPassword });
+
+    // if backend returns {success:false}
+    if (resp && typeof resp === 'object' && resp.success === false) {
+      throw new Error(resp.message || 'Password update failed');
+    }
+
+    alert('Password updated successfully.');
+
+    if (newPassEl) newPassEl.value = '';
+    if (confirmEl) confirmEl.value = '';
+  } catch (err) {
+    console.error('updateAccount(change password) error:', err);
+    alert(
+      'Failed to change password.\n\n' +
+      'Make sure your backend route exists:\n' +
+      'PATCH /api/users/:id/password  body: { password }\n\n' +
+      'And your server accepts plaintext passwords.'
+    );
+  }
 }
 
 /* =======================
@@ -875,6 +969,18 @@ window.addEventListener('load', async () => {
     await loadRoles();
     await loadStaff();
     await loadDepartments(); // loads academic + removed students
+
+    // If your account form exists, bind submit handler.
+    // If you already call updateAccount from HTML (onsubmit), this won't break.
+    const accForm =
+      document.getElementById('account-form') ||
+      document.querySelector('form[data-account-form="true"]') ||
+      document.querySelector('form#account');
+
+    if (accForm && !accForm.__bound_updateAccount) {
+      accForm.addEventListener('submit', updateAccount);
+      accForm.__bound_updateAccount = true;
+    }
   } catch (e) {
     console.error('INIT error:', e);
   } finally {

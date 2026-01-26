@@ -176,7 +176,7 @@
             </div>
             <div>
               <h2 class="font-black text-slate-900 uppercase text-xs tracking-wider">Student Management</h2>
-              <p class="text-xs font-bold text-slate-400 mt-1">Removed Students.</p>
+              <p class="text-xs font-bold text-slate-400 mt-1">Removed Students</p>
             </div>
           </div>
 
@@ -377,4 +377,17 @@
     });
   </script>
 </body>
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal-overlay">
+  <div class="modal-box">
+    <h3>Confirm Deletion</h3>
+    <p id="deleteMessage"></p>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn-danger" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
 </html>

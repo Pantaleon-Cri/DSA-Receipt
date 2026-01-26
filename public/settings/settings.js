@@ -1,35 +1,18 @@
 /**
- * settings.js (FULL, UPDATED — REMOVED STUDENTS + RESTORE CONFIRMATION MODAL via POST)
+ * settings.js (FULL, UPDATED — STAFF DELETE + CHANGE PASSWORD BOTH USE FANCY MODALS)
  *
- * ✅ Academic Structure pagination is LIMITED to 5 rows per page.
- * ✅ Staff role handling FIXED to match YOUR schema:
- *    - user table column is `role` (varchar) BUT you store the ROLE ID inside it (e.g. "1","2","3","4")
- *    - /api/users returns: { user_id, user_firstname, user_lastname, role }   (role = role_id)
- *    - /api/roles returns: { role_id, role_name }
- *    - UI shows role_name by mapping user.role (role_id) -> roles.role_name
- * ✅ Add Staff sends `role` (role_id) to backend (NOT role_name, NOT role_id field name)
- * ✅ Academic Structure: Edit button functional (uses PUT routes you added)
+ * ✅ Staff Delete:
+ *    - user-minus button opens a fancy modal (auto-injected if missing)
+ *    - Confirm triggers DELETE /api/users/:id
  *
- * ✅ Student Management (Soft Deleted / Removed Students)
- *    - Lists ONLY students with is_removed = 1
- *    - ✅ Bound to ACTIVE semester by backend route: GET /api/students/removed
- *    - ✅ Restore uses POST /api/students/restore (sets is_removed = 2)
- *    - ✅ NEW: Restore confirmation modal (uses #restore-student-modal in your HTML)
+ * ✅ Change Password:
+ *    - Account form submit opens a fancy modal (auto-injected if missing)
+ *    - Confirm triggers PATCH/PUT fallback endpoints
+ *    - Shows inline loading/success/error (no alert/confirm needed)
  *
- * REQUIRED ENDPOINTS:
- * - GET   /api/roles
- * - GET   /api/users
- * - POST  /api/users
- * - GET   /api/departments
- * - POST  /api/departments
- * - PUT   /api/departments/:id
- * - GET   /api/courses?department_id=#
- * - POST  /api/courses
- * - PUT   /api/courses/:id
- *
- * REMOVED STUDENTS ENDPOINTS (YOUR BACKEND):
- * - GET   /api/students/removed
- * - POST  /api/students/restore   (expects { student_id })
+ * NOTE:
+ * - Uses Lucide icons (lucide.createIcons()).
+ * - Password is plaintext as per your database.
  */
 
 let sidebarExpanded = true;
@@ -40,6 +23,39 @@ let selectedAcademicType = 'department';
 ======================= */
 const REMOVED_STUDENTS_GET_URL = '/api/students/removed';
 const RESTORE_STUDENT_POST_URL = '/api/students/restore';
+
+/* =======================
+   CONFIG (STAFF DELETE)
+======================= */
+const DELETE_STAFF_ENDPOINTS = [
+  (userId) => ({ method: 'DELETE', url: `/api/users/${encodeURIComponent(userId)}` }),
+];
+
+/* =======================
+   CONFIG (ACCOUNT / PASSWORD)
+======================= */
+const CHANGE_PASSWORD_ENDPOINTS = [
+  // Option A
+  (userId) => ({
+    method: 'PATCH',
+    url: `/api/users/${encodeURIComponent(userId)}/password`,
+    body: (pw) => ({ password: pw }),
+  }),
+
+  // Option B
+  (userId) => ({
+    method: 'PATCH',
+    url: `/api/users/password`,
+    body: (pw) => ({ user_id: Number(userId), password: pw }),
+  }),
+
+  // Option C
+  (userId) => ({
+    method: 'PUT',
+    url: `/api/users/${encodeURIComponent(userId)}`,
+    body: (pw) => ({ password: pw }),
+  }),
+];
 
 /* =======================
    API HELPERS
@@ -79,6 +95,24 @@ async function apiPut(url, body) {
   return res.json();
 }
 
+async function apiRequest(method, url, body) {
+  const hasBody = body !== undefined;
+  const res = await fetch(url, {
+    method,
+    headers: hasBody ? { 'Content-Type': 'application/json' } : undefined,
+    body: hasBody ? JSON.stringify(body) : undefined,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`${method} ${url} failed: ${res.status} ${text}`);
+  }
+
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return res.json();
+  return { success: true };
+}
+
 function escapeHtml(str) {
   return String(str ?? '')
     .replaceAll('&', '&amp;')
@@ -97,12 +131,10 @@ function escapeAttr(str) {
 /* =======================
    STATE
 ======================= */
-let rolesDb = [];        // from /api/roles -> [{role_id, role_name}]
-let staffDb = [];        // from /api/users -> [{user_id,user_firstname,user_lastname,role}] where role=role_id
-let departmentsDb = [];  // from /api/departments
-let academicRowsDb = []; // rows for academic table (dept + course)
-
-// Removed students
+let rolesDb = [];
+let staffDb = [];
+let departmentsDb = [];
+let academicRowsDb = [];
 let removedStudentsDb = [];
 
 /* =======================
@@ -111,7 +143,6 @@ let removedStudentsDb = [];
 function getRoleNameByUserRoleField(userRoleValue) {
   const idNum = Number(userRoleValue);
   if (!Number.isFinite(idNum)) return 'Unknown';
-
   const r = rolesDb.find(x => Number(x.role_id) === idNum);
   return r ? r.role_name : 'Unknown';
 }
@@ -127,14 +158,21 @@ function getLoggedUser() {
   }
 }
 
+function getLoggedUserId() {
+  const user = getLoggedUser();
+  const idVal = user?.user_id ?? user?.userId ?? user?.id ?? user?.userID ?? '';
+  return String(idVal ?? '').trim();
+}
+
 function applyLoggedUserToUI() {
   const user = getLoggedUser();
   if (!user) return;
 
   const sidebarNameEl = document.getElementById('user-role');
   if (sidebarNameEl) {
-    const fullName = `${user.user_firstName ?? ''} ${user.user_lastName ?? ''}`.trim();
-    sidebarNameEl.textContent = fullName || '';
+    const fn = user.user_firstname ?? user.user_firstName ?? user.first_name ?? '';
+    const ln = user.user_lastname ?? user.user_lastName ?? user.last_name ?? '';
+    sidebarNameEl.textContent = `${fn} ${ln}`.trim();
   }
 
   const sidebarRoleEl = document.getElementById('user-role-label');
@@ -145,13 +183,14 @@ function applyLoggedUserToUI() {
 
   const accName = document.getElementById('acc-name');
   if (accName) {
-    accName.value = `${user.user_firstName ?? ''} ${user.user_lastName ?? ''}`.trim();
+    const fn = user.user_firstname ?? user.user_firstName ?? user.first_name ?? '';
+    const ln = user.user_lastname ?? user.user_lastName ?? user.last_name ?? '';
+    accName.value = `${fn} ${ln}`.trim();
   }
 
   const accId = document.getElementById('acc-id');
   if (accId) {
-    const idVal = user.user_id ?? user.userId ?? user.id ?? '';
-    accId.value = idVal;
+    accId.value = getLoggedUserId();
   }
 }
 
@@ -163,7 +202,6 @@ function toggleSidebar() {
 
   const sidebar = document.getElementById('sidebar');
   const icon = document.getElementById('sidebar-toggle-icon');
-
   if (!sidebar || !icon) return;
 
   sidebar.classList.toggle('sidebar-expanded', sidebarExpanded);
@@ -177,7 +215,7 @@ function toggleSidebar() {
 }
 
 /* =======================
-   ROLES (DYNAMIC SELECT)
+   ROLES
 ======================= */
 async function loadRoles() {
   const select = document.getElementById('staff-role');
@@ -190,7 +228,6 @@ async function loadRoles() {
     rolesDb = (data.success && Array.isArray(data.roles)) ? data.roles : [];
 
     select.innerHTML = '';
-
     const ph = document.createElement('option');
     ph.value = '';
     ph.textContent = 'Select role';
@@ -247,6 +284,184 @@ async function loadStaff() {
   }
 }
 
+/* ---------- STAFF DELETE MODAL ---------- */
+let pendingDeleteStaffId = null;
+
+function ensureDeleteStaffModal() {
+  if (document.getElementById('delete-staff-modal')) return;
+
+  if (!document.getElementById('delete-staff-modal-styles')) {
+    const style = document.createElement('style');
+    style.id = 'delete-staff-modal-styles';
+    style.textContent = `
+      .delstaff-overlay{
+        position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+        background:rgba(2,6,23,.55); backdrop-filter:blur(4px);
+        z-index:9999; padding:16px;
+      }
+      .delstaff-overlay.delstaff-open{display:flex;}
+      .delstaff-card{
+        width:min(520px,92vw); border-radius:18px; background:#fff;
+        box-shadow:0 20px 60px rgba(2,6,23,.35); overflow:hidden;
+        transform:translateY(6px) scale(.98); opacity:0;
+        animation:delstaff-pop .18s ease-out forwards;
+      }
+      @keyframes delstaff-pop{to{transform:translateY(0) scale(1); opacity:1;}}
+      .delstaff-head{display:flex; gap:12px; align-items:flex-start; padding:18px 18px 10px;
+        background:linear-gradient(180deg, rgba(239,68,68,.10), rgba(239,68,68,0));
+      }
+      .delstaff-icon{width:44px; height:44px; border-radius:14px; display:grid; place-items:center;
+        background:rgba(239,68,68,.12); color:rgb(220,38,38); flex:0 0 auto;
+      }
+      .delstaff-title{font-weight:900; font-size:16px; color:#0f172a; margin:0; line-height:1.2;}
+      .delstaff-sub{margin:6px 0 0; font-size:12px; color:#475569; line-height:1.5;}
+      .delstaff-body{padding:0 18px 16px;}
+      .delstaff-meta{margin-top:10px; border:1px solid #e2e8f0; background:#f8fafc;
+        border-radius:14px; padding:12px; display:grid; gap:6px;
+      }
+      .delstaff-row{display:flex; justify-content:space-between; gap:12px; font-size:12px;}
+      .delstaff-label{color:#64748b; font-weight:800; text-transform:uppercase; font-size:10px; letter-spacing:.06em;}
+      .delstaff-value{color:#0f172a; font-weight:800;}
+      .delstaff-actions{padding:14px 18px 18px; display:flex; justify-content:flex-end; gap:10px;}
+      .delstaff-btn{border:0; cursor:pointer; border-radius:14px; padding:10px 14px; font-size:12px; font-weight:900; letter-spacing:.02em;}
+      .delstaff-cancel{background:#e2e8f0; color:#0f172a;}
+      .delstaff-cancel:hover{background:#cbd5e1;}
+      .delstaff-danger{background:#ef4444; color:#fff;}
+      .delstaff-danger:hover{filter:brightness(.95);}
+      .delstaff-danger:disabled{opacity:.6; cursor:not-allowed;}
+      .delstaff-x{margin-left:auto; border:0; background:transparent; cursor:pointer; padding:8px; border-radius:12px; color:#475569;}
+      .delstaff-x:hover{background:rgba(15,23,42,.06);}
+    `;
+    document.head.appendChild(style);
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'delete-staff-modal';
+  overlay.className = 'delstaff-overlay hidden';
+  overlay.innerHTML = `
+    <div class="delstaff-card" role="dialog" aria-modal="true" aria-labelledby="delstaff-title">
+      <div class="delstaff-head">
+        <div class="delstaff-icon">
+          <i data-lucide="user-minus" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 id="delstaff-title" class="delstaff-title">Remove staff/user?</h3>
+          <p class="delstaff-sub">This action will permanently delete the staff/user record.</p>
+        </div>
+        <button class="delstaff-x" type="button" aria-label="Close" id="delete-staff-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="delstaff-body">
+        <div class="delstaff-meta">
+          <div class="delstaff-row">
+            <span class="delstaff-label">Name</span>
+            <span class="delstaff-value" id="delete-staff-name">—</span>
+          </div>
+          <div class="delstaff-row">
+            <span class="delstaff-label">User ID</span>
+            <span class="delstaff-value" id="delete-staff-id">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="delstaff-actions">
+        <button class="delstaff-btn delstaff-cancel" type="button" id="delete-staff-cancel-btn">Cancel</button>
+        <button class="delstaff-btn delstaff-danger" type="button" id="delete-staff-confirm-btn">Delete</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = () => closeDeleteStaffModal();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.getElementById('delete-staff-close-btn')?.addEventListener('click', close);
+  document.getElementById('delete-staff-cancel-btn')?.addEventListener('click', close);
+  document.getElementById('delete-staff-confirm-btn')?.addEventListener('click', () => {
+    confirmDeleteStaff().catch(() => {});
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const m = document.getElementById('delete-staff-modal');
+      if (m && !m.classList.contains('hidden')) close();
+    }
+  });
+
+  lucide.createIcons();
+}
+
+function openDeleteStaffModal(user_id) {
+  pendingDeleteStaffId = String(user_id ?? '').trim();
+  if (!pendingDeleteStaffId) return;
+
+  ensureDeleteStaffModal();
+
+  const u = staffDb.find(x => String(x.user_id) === pendingDeleteStaffId);
+  const name = u ? `${u.user_firstname ?? ''} ${u.user_lastname ?? ''}`.trim() : pendingDeleteStaffId;
+
+  document.getElementById('delete-staff-name') && (document.getElementById('delete-staff-name').textContent = name || '—');
+  document.getElementById('delete-staff-id') && (document.getElementById('delete-staff-id').textContent = pendingDeleteStaffId || '—');
+
+  const modal = document.getElementById('delete-staff-modal');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('delstaff-open');
+  lucide.createIcons();
+}
+
+function closeDeleteStaffModal() {
+  pendingDeleteStaffId = null;
+  const modal = document.getElementById('delete-staff-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('delstaff-open');
+}
+
+async function confirmDeleteStaff() {
+  if (!pendingDeleteStaffId) return;
+
+  const btn = document.getElementById('delete-staff-confirm-btn');
+  if (btn) btn.disabled = true;
+
+  try {
+    await deleteStaffById(pendingDeleteStaffId);
+    await loadStaff();
+  } catch (err) {
+    console.error('confirmDeleteStaff error:', err);
+    // minimal fallback
+    alert(
+      'Failed to delete staff.\n\n' +
+      'Make sure your backend has:\n' +
+      'DELETE /api/users/:id\n'
+    );
+  } finally {
+    if (btn) btn.disabled = false;
+    closeDeleteStaffModal();
+  }
+}
+
+async function deleteStaffById(userId) {
+  let lastErr = null;
+
+  for (const make of DELETE_STAFF_ENDPOINTS) {
+    const ep = make(userId);
+    try {
+      const resp = await apiRequest(ep.method, ep.url);
+      if (resp && typeof resp === 'object' && resp.success === false) {
+        throw new Error(resp.message || 'Delete failed');
+      }
+      return resp;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw lastErr || new Error('Delete failed');
+}
+
 function renderStaff() {
   const tbody = document.getElementById('staff-table-body');
   if (!tbody) return;
@@ -275,8 +490,11 @@ function renderStaff() {
           </span>
         </td>
         <td class="px-8 py-4 text-right">
-          <button disabled title="Add DELETE /api/users/:id to enable"
-            class="text-slate-200 cursor-not-allowed">
+          <button
+            class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition"
+            title="Remove staff"
+            onclick="openDeleteStaffModal('${escapeAttr(u.user_id)}')"
+          >
             <i data-lucide="user-minus" class="w-4 h-4"></i>
           </button>
         </td>
@@ -313,7 +531,7 @@ async function saveStaff() {
       user_id: Number(userIdRaw),
       fullname,
       password,
-      role: String(roleIdRaw)
+      role: String(roleIdRaw),
     });
 
     await loadStaff();
@@ -335,9 +553,6 @@ async function saveStaff() {
 
 /* =======================
    STUDENT MANAGEMENT (REMOVED)
-   ✅ UI columns: Student | Student ID | Department | Status | Actions
-   ✅ Restore uses POST /api/students/restore
-   ✅ NEW: confirmation modal
 ======================= */
 async function loadRemovedStudents() {
   const tbody = document.getElementById('removed-students-table-body');
@@ -421,12 +636,7 @@ function renderRemovedStudents() {
 }
 
 /* =======================
-   RESTORE CONFIRMATION MODAL
-   Requires HTML IDs:
-   - restore-student-modal
-   - restore-student-name
-   - restore-student-id
-   - restore-student-dept
+   RESTORE CONFIRMATION MODAL (YOUR EXISTING)
 ======================= */
 let pendingRestoreStudentId = null;
 
@@ -460,22 +670,20 @@ async function confirmRestoreStudent() {
 
   try {
     await restoreStudent(pendingRestoreStudentId);
+    await loadRemovedStudents();
   } finally {
     closeRestoreStudentModal();
   }
 }
 
-/* =======================
-   RESTORE ACTION (POST)
-======================= */
 async function restoreStudent(studentId) {
   if (!window.CURRENT_YEAR_SEMESTER_ID) {
     throw new Error("No active semester selected.");
   }
 
-  await apiPost("/api/students/restore", {
+  await apiPost(RESTORE_STUDENT_POST_URL, {
     student_id: studentId,
-    year_semester_id: window.CURRENT_YEAR_SEMESTER_ID
+    year_semester_id: window.CURRENT_YEAR_SEMESTER_ID,
   });
 }
 
@@ -491,8 +699,6 @@ async function loadDepartments() {
     departmentsDb = (data.success && Array.isArray(data.departments)) ? data.departments : [];
     renderDepartmentSelect();
     await loadAcademic();
-
-    // load removed students after departments loaded (for dept mapping)
     await loadRemovedStudents();
   } catch (err) {
     console.error('loadDepartments error:', err);
@@ -600,7 +806,7 @@ async function loadAcademic() {
 }
 
 /* =======================
-   ACADEMIC PAGINATION (5 ROWS)
+   ACADEMIC PAGINATION
 ======================= */
 const academicPager = { page: 1, pageSize: 5 };
 
@@ -629,7 +835,6 @@ function buildPageButtons(current, total) {
 
 function renderAcademicPaginationUI() {
   const totalPages = getAcademicTotalPages();
-
   academicPager.page = Math.min(Math.max(1, academicPager.page), totalPages);
 
   const info = document.getElementById('academic-page-info');
@@ -642,7 +847,6 @@ function renderAcademicPaginationUI() {
   const endIndex = Math.min(academicPager.page * academicPager.pageSize, total);
 
   if (info) info.textContent = `Showing ${startIndex}-${endIndex} of ${total}`;
-
   if (prevBtn) prevBtn.disabled = academicPager.page <= 1;
   if (nextBtn) nextBtn.disabled = academicPager.page >= totalPages;
 
@@ -766,7 +970,7 @@ async function saveAcademicUnit() {
       if (editingAcademic.entity === 'department') {
         await apiPut(`/api/departments/${encodeURIComponent(editingAcademic.department_id)}`, {
           department_name: name,
-          department_abbr: abbr
+          department_abbr: abbr,
         });
 
         editingAcademic = null;
@@ -785,7 +989,7 @@ async function saveAcademicUnit() {
         await apiPut(`/api/courses/${encodeURIComponent(editingAcademic.course_id)}`, {
           department_id: Number(deptId),
           course_name: name,
-          course_abbr: abbr
+          course_abbr: abbr,
         });
 
         editingAcademic = null;
@@ -809,7 +1013,7 @@ async function saveAcademicUnit() {
       await apiPost('/api/courses', {
         department_id: Number(deptId),
         course_name: name,
-        course_abbr: abbr
+        course_abbr: abbr,
       });
 
       await loadAcademic();
@@ -860,6 +1064,403 @@ function toggleAcademicType(type) {
 }
 
 /* =======================
+   ACCOUNT (CHANGE PASSWORD) — INPUTS
+======================= */
+function getAccountPasswordInputs() {
+  const accIdEl = document.getElementById('acc-id');
+
+  const currentEl =
+    document.getElementById('acc-current-pass') ||
+    document.getElementById('current-password') ||
+    document.getElementById('acc-old-pass') ||
+    document.getElementById('old-password');
+
+  const newEl =
+    document.getElementById('acc-new-pass') ||
+    document.getElementById('new-password') ||
+    document.getElementById('acc-pass') ||
+    document.getElementById('password');
+
+  const confirmEl =
+    document.getElementById('acc-confirm-pass') ||
+    document.getElementById('confirm-password') ||
+    document.getElementById('acc-pass-confirm') ||
+    document.getElementById('password-confirm');
+
+  const userIdRaw = (accIdEl?.value ?? '').trim() || getLoggedUserId();
+
+  return {
+    userIdRaw,
+    currentPassword: (currentEl?.value ?? '').trim(),
+    newPassword: (newEl?.value ?? '').trim(),
+    confirmPassword: (confirmEl?.value ?? '').trim(),
+    currentEl,
+    newEl,
+    confirmEl,
+  };
+}
+
+/* =======================
+   CHANGE PASSWORD MODAL (NEW)
+======================= */
+let pendingChangePassword = { userId: null, newPassword: null, refs: null };
+
+function ensureChangePasswordModal() {
+  if (document.getElementById('change-pass-modal')) return;
+
+  if (!document.getElementById('change-pass-modal-styles')) {
+    const style = document.createElement('style');
+    style.id = 'change-pass-modal-styles';
+    style.textContent = `
+      .chgpw-overlay{
+        position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+        background:rgba(2,6,23,.55); backdrop-filter:blur(4px);
+        z-index:9999; padding:16px;
+      }
+      .chgpw-overlay.chgpw-open{display:flex;}
+      .chgpw-card{
+        width:min(560px,92vw); border-radius:18px; background:#fff;
+        box-shadow:0 20px 60px rgba(2,6,23,.35); overflow:hidden;
+        transform:translateY(6px) scale(.98); opacity:0;
+        animation:chgpw-pop .18s ease-out forwards;
+      }
+      @keyframes chgpw-pop{to{transform:translateY(0) scale(1); opacity:1;}}
+      .chgpw-head{
+        display:flex; gap:12px; align-items:flex-start; padding:18px 18px 10px;
+        background:linear-gradient(180deg, rgba(59,130,246,.10), rgba(59,130,246,0));
+      }
+      .chgpw-icon{
+        width:44px; height:44px; border-radius:14px; display:grid; place-items:center;
+        background:rgba(59,130,246,.12); color:rgb(37,99,235); flex:0 0 auto;
+      }
+      .chgpw-title{font-weight:900; font-size:16px; color:#0f172a; margin:0; line-height:1.2;}
+      .chgpw-sub{margin:6px 0 0; font-size:12px; color:#475569; line-height:1.5;}
+      .chgpw-x{
+        margin-left:auto; border:0; background:transparent; cursor:pointer;
+        padding:8px; border-radius:12px; color:#475569;
+      }
+      .chgpw-x:hover{background:rgba(15,23,42,.06);}
+      .chgpw-body{padding:0 18px 16px;}
+      .chgpw-meta{
+        margin-top:10px; border:1px solid #e2e8f0; background:#f8fafc;
+        border-radius:14px; padding:12px; display:grid; gap:10px;
+      }
+      .chgpw-row{display:flex; justify-content:space-between; gap:12px; font-size:12px; align-items:center;}
+      .chgpw-label{color:#64748b; font-weight:800; text-transform:uppercase; font-size:10px; letter-spacing:.06em;}
+      .chgpw-value{color:#0f172a; font-weight:900;}
+      .chgpw-pill{
+        padding:6px 10px; border-radius:999px; font-size:10px; font-weight:900;
+        background:#e2e8f0; color:#0f172a; letter-spacing:.06em; text-transform:uppercase;
+      }
+      .chgpw-status{
+        margin-top:10px;
+        border-radius:14px;
+        padding:10px 12px;
+        font-size:12px;
+        display:none;
+        border:1px solid #e2e8f0;
+        background:#fff;
+        color:#0f172a;
+        line-height:1.4;
+      }
+      .chgpw-status.chgpw-show{display:block;}
+      .chgpw-actions{padding:14px 18px 18px; display:flex; justify-content:flex-end; gap:10px;}
+      .chgpw-btn{border:0; cursor:pointer; border-radius:14px; padding:10px 14px; font-size:12px; font-weight:900; letter-spacing:.02em;}
+      .chgpw-cancel{background:#e2e8f0; color:#0f172a;}
+      .chgpw-cancel:hover{background:#cbd5e1;}
+      .chgpw-primary{background:#2563eb; color:#fff;}
+      .chgpw-primary:hover{filter:brightness(.95);}
+      .chgpw-primary:disabled{opacity:.6; cursor:not-allowed;}
+      .chgpw-ok{background:#16a34a; color:#fff;}
+      .chgpw-ok:hover{filter:brightness(.95);}
+    `;
+    document.head.appendChild(style);
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'change-pass-modal';
+  overlay.className = 'chgpw-overlay hidden';
+  overlay.innerHTML = `
+    <div class="chgpw-card" role="dialog" aria-modal="true" aria-labelledby="chgpw-title">
+      <div class="chgpw-head">
+        <div class="chgpw-icon">
+          <i data-lucide="key-round" class="w-4 h-4"></i>
+        </div>
+
+        <div>
+          <h3 id="chgpw-title" class="chgpw-title">Update password</h3>
+          <p class="chgpw-sub">
+            Please confirm you want to update the account password.
+          </p>
+        </div>
+
+        <button class="chgpw-x" type="button" aria-label="Close" id="chgpw-close-btn">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="chgpw-body">
+        <div class="chgpw-meta">
+          <div class="chgpw-row">
+            <span class="chgpw-label">User ID</span>
+            <span class="chgpw-value" id="chgpw-user-id">—</span>
+          </div>
+          <div class="chgpw-row">
+            <span class="chgpw-label">New password</span>
+            <span class="chgpw-pill" id="chgpw-pw-mask">••••••</span>
+          </div>
+          <div class="chgpw-row">
+
+
+        <div class="chgpw-status" id="chgpw-status"></div>
+      </div>
+
+      <div class="chgpw-actions">
+        <button class="chgpw-btn chgpw-cancel" type="button" id="chgpw-cancel-btn">Cancel</button>
+        <button class="chgpw-btn chgpw-primary" type="button" id="chgpw-confirm-btn">Confirm</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = () => closeChangePasswordModal();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.getElementById('chgpw-close-btn')?.addEventListener('click', close);
+  document.getElementById('chgpw-cancel-btn')?.addEventListener('click', close);
+  document.getElementById('chgpw-confirm-btn')?.addEventListener('click', () => {
+    confirmChangePasswordModal().catch(() => {});
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const m = document.getElementById('change-pass-modal');
+      if (m && !m.classList.contains('hidden')) close();
+    }
+  });
+
+  lucide.createIcons();
+}
+
+function setChangePasswordStatus(message, kind = 'info') {
+  const box = document.getElementById('chgpw-status');
+  if (!box) return;
+
+  box.textContent = message ?? '';
+  box.classList.add('chgpw-show');
+
+  // subtle border hints per kind
+  if (kind === 'error') {
+    box.style.borderColor = 'rgba(239,68,68,.35)';
+    box.style.background = 'rgba(239,68,68,.06)';
+  } else if (kind === 'success') {
+    box.style.borderColor = 'rgba(22,163,74,.35)';
+    box.style.background = 'rgba(22,163,74,.06)';
+  } else if (kind === 'loading') {
+    box.style.borderColor = 'rgba(37,99,235,.25)';
+    box.style.background = 'rgba(37,99,235,.05)';
+  } else {
+    box.style.borderColor = '#e2e8f0';
+    box.style.background = '#fff';
+  }
+}
+
+function clearChangePasswordStatus() {
+  const box = document.getElementById('chgpw-status');
+  if (!box) return;
+  box.textContent = '';
+  box.classList.remove('chgpw-show');
+  box.style.borderColor = '#e2e8f0';
+  box.style.background = '#fff';
+}
+
+function openChangePasswordModal({ userId, newPassword, refs }) {
+  ensureChangePasswordModal();
+
+  pendingChangePassword = {
+    userId: String(userId ?? '').trim(),
+    newPassword: String(newPassword ?? ''),
+    refs: refs || null,
+  };
+
+  const idEl = document.getElementById('chgpw-user-id');
+  const maskEl = document.getElementById('chgpw-pw-mask');
+  if (idEl) idEl.textContent = pendingChangePassword.userId || '—';
+  if (maskEl) {
+    const len = Math.max(4, Math.min(12, pendingChangePassword.newPassword.length || 6));
+    maskEl.textContent = '•'.repeat(len);
+  }
+
+  // reset UI
+  clearChangePasswordStatus();
+
+  const confirmBtn = document.getElementById('chgpw-confirm-btn');
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Confirm';
+    confirmBtn.classList.remove('chgpw-ok');
+    confirmBtn.classList.add('chgpw-primary');
+  }
+
+  const modal = document.getElementById('change-pass-modal');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('chgpw-open');
+  lucide.createIcons();
+}
+
+function closeChangePasswordModal() {
+  pendingChangePassword = { userId: null, newPassword: null, refs: null };
+
+  const modal = document.getElementById('change-pass-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('chgpw-open');
+}
+
+async function confirmChangePasswordModal() {
+  const userIdRaw = pendingChangePassword.userId;
+  const newPassword = pendingChangePassword.newPassword;
+
+  if (!userIdRaw || !/^\d+$/.test(String(userIdRaw))) {
+    setChangePasswordStatus('Invalid user_id. Please check your Account ID field.', 'error');
+    return;
+  }
+  if (!newPassword) {
+    setChangePasswordStatus('New password is empty. Please type a new password first.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('chgpw-confirm-btn');
+  if (btn) btn.disabled = true;
+
+  try {
+    setChangePasswordStatus('Updating password…', 'loading');
+
+    await changePasswordPlaintext(Number(userIdRaw), newPassword);
+
+    setChangePasswordStatus('Password updated successfully.', 'success');
+
+    // change button to "Done"
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Done';
+      btn.classList.remove('chgpw-primary');
+      btn.classList.add('chgpw-ok');
+      btn.onclick = () => closeChangePasswordModal();
+    }
+
+    // clear inputs
+    const refs = pendingChangePassword.refs;
+    if (refs?.currentEl) refs.currentEl.value = '';
+    if (refs?.newEl) refs.newEl.value = '';
+    if (refs?.confirmEl) refs.confirmEl.value = '';
+  } catch (err) {
+    console.error('confirmChangePasswordModal error:', err);
+    setChangePasswordStatus(
+      'Failed to change password.\n' +
+        'Make sure your backend has one of these:\n' +
+        '1) PATCH /api/users/:id/password\n' +
+        '2) PATCH /api/users/password\n' +
+        '3) PUT /api/users/:id\n',
+      'error'
+    );
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Confirm';
+    }
+  }
+}
+
+async function changePasswordPlaintext(userId, newPassword) {
+  let lastErr = null;
+
+  for (const make of CHANGE_PASSWORD_ENDPOINTS) {
+    const ep = make(userId);
+    try {
+      const payload = ep.body(newPassword);
+      const resp = await apiRequest(ep.method, ep.url, payload);
+
+      if (resp && typeof resp === 'object' && resp.success === false) {
+        throw new Error(resp.message || 'Password update failed');
+      }
+
+      return resp;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw lastErr || new Error('Password update failed');
+}
+
+/* =======================
+   ACCOUNT SUBMIT HANDLER — NOW OPENS MODAL
+======================= */
+async function updateAccount(e) {
+  e.preventDefault();
+
+  const {
+    userIdRaw,
+    newPassword,
+    confirmPassword,
+    currentEl,
+    newEl,
+    confirmEl
+  } = getAccountPasswordInputs();
+
+  // validations (no alert for success flow)
+  if (!userIdRaw) {
+    openChangePasswordModal({
+      userId: '',
+      newPassword: '',
+      refs: { currentEl, newEl, confirmEl },
+    });
+    setChangePasswordStatus('Missing user_id. Please make sure #acc-id is filled.', 'error');
+    return;
+  }
+
+  if (!/^\d+$/.test(String(userIdRaw))) {
+    openChangePasswordModal({
+      userId: userIdRaw,
+      newPassword: '',
+      refs: { currentEl, newEl, confirmEl },
+    });
+    setChangePasswordStatus('user_id must be numeric (INT in your database).', 'error');
+    return;
+  }
+
+  if (!newPassword) {
+    openChangePasswordModal({
+      userId: userIdRaw,
+      newPassword: '',
+      refs: { currentEl, newEl, confirmEl },
+    });
+    setChangePasswordStatus('Please enter your new password.', 'error');
+    newEl?.focus?.();
+    return;
+  }
+
+  if (confirmEl && confirmPassword !== newPassword) {
+    openChangePasswordModal({
+      userId: userIdRaw,
+      newPassword,
+      refs: { currentEl, newEl, confirmEl },
+    });
+    setChangePasswordStatus('New password and confirm password do not match.', 'error');
+    confirmEl?.focus?.();
+    return;
+  }
+
+  // ✅ Open modal for confirmation (this is what you asked)
+  openChangePasswordModal({
+    userId: userIdRaw,
+    newPassword,
+    refs: { currentEl, newEl, confirmEl },
+  });
+}
+
+/* =======================
    UTILITIES
 ======================= */
 function toggleModal(id) {
@@ -876,11 +1477,6 @@ function toggleModal(id) {
   }
 }
 
-function updateAccount(e) {
-  e.preventDefault();
-  alert('Account update is not connected yet. Add a backend PATCH route to save changes.');
-}
-
 /* =======================
    INIT
 ======================= */
@@ -889,9 +1485,24 @@ window.addEventListener('load', async () => {
     applyLoggedUserToUI();
     bindAcademicPaginationEvents();
 
+    // Inject modals early
+    ensureDeleteStaffModal();
+    ensureChangePasswordModal();
+
     await loadRoles();
     await loadStaff();
-    await loadDepartments(); // loads academic + removed students
+    await loadDepartments();
+
+    // bind account form
+    const accForm =
+      document.getElementById('account-form') ||
+      document.querySelector('form[data-account-form="true"]') ||
+      document.querySelector('form#account');
+
+    if (accForm && !accForm.__bound_updateAccount) {
+      accForm.addEventListener('submit', updateAccount);
+      accForm.__bound_updateAccount = true;
+    }
   } catch (e) {
     console.error('INIT error:', e);
   } finally {
