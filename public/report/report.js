@@ -542,31 +542,50 @@ function downloadExcel() {
   const ackTitleRow = bRows.length + 1;
 
   bRows.push(["Received By:", "", "", "", "", "", ""]);
-  bRows.push([CURRENT_USER_NAME || "", "", "", "", "", "", ""]);
   bRows.push(["", "", "", "", "", "", ""]);
-
-  bRows.push(["COLLECTION STAFF", "", "", "", "", "", ""]);
-  bRows.push(["OSAD STAFF", "", "", "", "", "", ""]);
+  bRows.push([CURRENT_USER_NAME || "", "", "", "", "", "", ""]);
+  
+  bRows.push(["COLLECTION STAFF, OSAD STAFF", "", "", "", ""]);
   bRows.push(["", "", "", "", "", "", ""]);
 
   bRows.push(["Certified By:", "", "", "", "", "", ""]);
   bRows.push(["", "", "", "", "", "", ""]);
-  bRows.push(["ADMINISTRATIVE ASST.", "", "", "", "", "", ""]);
-  bRows.push(["OSAD SSG MODERATOR", "", "", "", "", "", ""]);
+  bRows.push(["", "", "", "", "", "", ""]);
+  bRows.push(["ADMINISTRATIVE ASST. OSAD", "", "", "", "", "", ""]);
+  bRows.push(["SSG MODERATOR", "", "", "", "", "", ""]);
+  bRows.push(["", "", "", "", "", "", ""]);
+
+  bRows.push(["Received by BUSINESS OFFICE:", "", "", "", "", "", ""]);
+  bRows.push(["", "", "", "", "", "", ""]);
+  bRows.push(["", "", "", "", "", "", ""]);
+  bRows.push(["Name & Signature", "", "", "", "", "", ""]);
+ 
 
   const wsB = XLSX.utils.aoa_to_sheet(bRows);
-
+  
   wsB["!cols"] = [
     { wch: 26 }, { wch: 22 }, { wch: 2 }, { wch: 2 },
     { wch: 16 }, { wch: 16 }, { wch: 18 }
   ];
 
   wsB["!merges"] = wsB["!merges"] || [];
-  wsB["!merges"].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } });
+  wsB["!merges"].push({s: { r: 0, c: 0 }, e: { r: 0, c: 1 }});
   wsB["!merges"].push({ s: { r: 0, c: 4 }, e: { r: 0, c: 6 } });
   wsB["!merges"].push({ s: { r: ackTitleRow - 1, c: 0 }, e: { r: ackTitleRow - 1, c: 2 } });
+  wsB["!merges"].push({ s: { r: 21, c: 0 }, e: { r: 21, c: 1 } });
+  wsB["!merges"].push({ s: { r: 27, c: 0 }, e: { r: 27, c: 1 } });  
+  wsB["!merges"].push({s: { r: 17, c: 0 }, e: { r: 17, c: 1 }});
+
+
+// Center text in both merged rows
+["A18"].forEach(cell => {
+  wsB[cell] = wsB[cell] || { t: "s", v: "" };
+  wsB[cell].s = {
+    alignment: {horizontal: "center", vertical: "center"}};
+  });
 
   setStyle(wsB, "A1", titleStyle);
+  setStyle(wsB, "B1", titleStyle);
   setStyle(wsB, "E1", denomTitleStyle);
 
   setStyle(wsB, "A2", headerStyle);
@@ -589,29 +608,77 @@ function downloadExcel() {
     if (wsB[cell]) wsB[cell].z = pesoFmt;
   }
 
-  const receivedLineRow = ackTitleRow + 2;
-  const certifiedLineRow = ackTitleRow + 7;
+ // ===================== SIGNATURE UNDERLINES =====================
 
-  ["A", "B", "C"].forEach(col => {
-    const addr1 = `${col}${receivedLineRow}`;
-    const addr2 = `${col}${certifiedLineRow}`;
-    setStyle(wsB, addr1, { border: { bottom: { style: "thin", color: { rgb: "94A3B8" } } } });
-    setStyle(wsB, addr2, { border: { bottom: { style: "thin", color: { rgb: "94A3B8" } } } });
+const underlineStyle = {
+  border: { bottom: { style: "thin", color: { rgb: "94A3B8" } } }
+};
+
+// 🔹 RECEIVED BY
+const receivedLineRow = ackTitleRow + 2;
+
+// 🔹 CERTIFIED BY
+const certifiedLineRow = ackTitleRow + 7;
+
+// 🔹 BUSINESS OFFICE (find row dynamically, then +2)
+const businessLineRow = ackTitleRow + 13;
+
+// ✅ Apply underline to all three
+[receivedLineRow, certifiedLineRow, businessLineRow].forEach(row => {
+  ["A", "B"].forEach(col => {
+    setStyle(wsB, `${col}${row}`, underlineStyle);
   });
+});
+// Put name directly ON the underline row
+const receivedNameRow = receivedLineRow;
 
-  const receivedNameRow = ackTitleRow + 1;
-  ["A", "B", "C"].forEach(col => {
-    const addr = `${col}${receivedNameRow}`;
-    setStyle(wsB, addr, { font: { bold: true }, alignment: { horizontal: "center", vertical: "center" } });
+["A", "B"].forEach(col => {
+  setStyle(wsB, `${col}${receivedNameRow}`, {
+    font: { bold: true },
+    alignment: { horizontal: "center", vertical: "center" }
   });
+});
 
-  if (wsLog["A1"]) {
-    wsLog["A1"].s = {
-      font: { bold: true, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: "0F172A" } },
-      alignment: { horizontal: "center", vertical: "center" }
-    };
+
+// 🔹 RECEIVED BY LINE (with underline + centered name)
+
+// Merge A & B so name is centered
+wsB["!merges"] = wsB["!merges"] || [];
+wsB["!merges"].push({
+  s: { r: receivedLineRow - 1, c: 0 },
+  e: { r: receivedLineRow - 1, c: 1 }
+});
+
+// Write name + underline in SAME cell
+wsB[`A${receivedLineRow}`] = {
+  t: "s",
+  v: CURRENT_USER_NAME || "",
+  s: {
+    font: { bold: true },
+    alignment: { horizontal: "center", vertical: "center" },
+    border: {
+      bottom: { style: "thin", color: { rgb: "94A3B8" } }
+    }
   }
+};
+
+
+// ===== FIX: BUSINESS OFFICE "Name & Signature" (dynamic row) =====
+const boIdx = bRows.findIndex(r => String(r?.[0] || "").trim() === "Received by BUSINESS OFFICE:");
+if (boIdx !== -1) {
+  const boUnderlineRow = (boIdx + 1) + 2;     // label row (1-based) + 2 rows
+  const boLabelRow = boUnderlineRow + 1;      // row below underline
+
+  wsB["!merges"] = wsB["!merges"] || [];
+  wsB["!merges"].push({ s: { r: boLabelRow - 1, c: 0 }, e: { r: boLabelRow - 1, c: 1 } }); // merge A:B
+
+  wsB[`A${boLabelRow}`] = {
+    t: "s",
+    v: "Name & Signature",
+    s: { alignment: { horizontal: "center", vertical: "center" }, font: { italic: true } }
+  };
+}
+
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsLog, "Transaction Log");

@@ -554,6 +554,10 @@ function downloadExcel() {
   bRows.push(["ADMINISTRATIVE ASST.", "", "", "", "", "", ""]);
   bRows.push(["OSAD SSG MODERATOR", "", "", "", "", "", ""]);
 
+  bRows.push(["Received by BUSINESS OFFICE:", "", "", "", "", "", ""]);
+  bRows.push(["", "", "", "", "", "", ""]);
+ 
+
   const wsB = XLSX.utils.aoa_to_sheet(bRows);
 
   wsB["!cols"] = [
@@ -562,11 +566,16 @@ function downloadExcel() {
   ];
 
   wsB["!merges"] = wsB["!merges"] || [];
-  wsB["!merges"].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } });
+ wsB["!merges"].push({
+  s: { r: 0, c: 0 }, // A1
+  e: { r: 0, c: 1 }  // B1
+});
+
   wsB["!merges"].push({ s: { r: 0, c: 4 }, e: { r: 0, c: 6 } });
   wsB["!merges"].push({ s: { r: ackTitleRow - 1, c: 0 }, e: { r: ackTitleRow - 1, c: 2 } });
 
-  setStyle(wsB, "A1", titleStyle);
+setStyle(wsB, "A1", titleStyle);
+setStyle(wsB, "B1", titleStyle);
   setStyle(wsB, "E1", denomTitleStyle);
 
   setStyle(wsB, "A2", headerStyle);
@@ -592,7 +601,7 @@ function downloadExcel() {
   const receivedLineRow = ackTitleRow + 2;
   const certifiedLineRow = ackTitleRow + 7;
 
-  ["A", "B", "C"].forEach(col => {
+  ["A", "B"].forEach(col => {
     const addr1 = `${col}${receivedLineRow}`;
     const addr2 = `${col}${certifiedLineRow}`;
     setStyle(wsB, addr1, { border: { bottom: { style: "thin", color: { rgb: "94A3B8" } } } });
