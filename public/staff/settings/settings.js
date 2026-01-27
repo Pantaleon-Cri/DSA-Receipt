@@ -1,5 +1,5 @@
 /**
- * settings.js (FULL, UPDATED — ADDED CHANGE PASSWORD SUPPORT)
+ * settings.js (FULL — REMOVED STUDENTS + RESTORE CONFIRMATION MODAL + CHANGE PASSWORD FANCY MODAL)
  *
  * ✅ Academic Structure pagination is LIMITED to 5 rows per page.
  * ✅ Staff role handling FIXED to match YOUR schema:
@@ -8,18 +8,21 @@
  *    - /api/roles returns: { role_id, role_name }
  *    - UI shows role_name by mapping user.role (role_id) -> roles.role_name
  * ✅ Add Staff sends `role` (role_id) to backend (NOT role_name, NOT role_id field name)
- * ✅ Academic Structure: Edit button functional (uses PUT routes you added)
  *
  * ✅ Student Management (Soft Deleted / Removed Students)
  *    - Lists ONLY students with is_removed = 1
  *    - ✅ Bound to ACTIVE semester by backend route: GET /api/students/removed
  *    - ✅ Restore uses POST /api/students/restore (sets is_removed = 2)
- *    - ✅ Restore confirmation modal supported (if your HTML has it)
+ *    - ✅ Restore confirmation modal (uses #restore-student-modal in your HTML)
  *
- * ✅ NEW: Change Password (PLAIN TEXT, NO BCRYPT)
- *    - Uses your backend route: PATCH /api/users/:id/password
- *    - Sends: { password: "newPasswordPlainText" }
- *    - Uses user_id from #acc-id or localStorage loggedUser fallback
+ * ✅ Change Password (Fancy Modal, auto-injected)
+ *    - Account form submit opens a fancy modal
+ *    - Confirm triggers PATCH/PUT fallback endpoints
+ *    - Shows inline loading/success/error
+ *
+ * NOTE:
+ * - Uses Lucide icons (lucide.createIcons()).
+ * - Password is plaintext as per your database.
  *
  * REQUIRED ENDPOINTS:
  * - GET   /api/roles
@@ -34,10 +37,12 @@
  *
  * REMOVED STUDENTS ENDPOINTS (YOUR BACKEND):
  * - GET   /api/students/removed
- * - POST  /api/students/restore
+ * - POST  /api/students/restore   (expects { student_id, year_semester_id })
  *
- * PASSWORD ENDPOINT (YOUR BACKEND):
- * - PATCH /api/users/:id/password   body: { password }
+ * CHANGE PASSWORD (one of these must exist):
+ * 1) PATCH /api/users/:id/password    body: { password }
+ * 2) PATCH /api/users/password        body: { user_id, password }
+ * 3) PUT   /api/users/:id             body: { password }
  */
 
 let sidebarExpanded = true;
@@ -50,9 +55,30 @@ const REMOVED_STUDENTS_GET_URL = '/api/students/removed';
 const RESTORE_STUDENT_POST_URL = '/api/students/restore';
 
 /* =======================
-   CONFIG (PASSWORD)
+   CONFIG (ACCOUNT / PASSWORD)
 ======================= */
-const CHANGE_PASSWORD_URL = (userId) => `/api/users/${encodeURIComponent(userId)}/password`;
+const CHANGE_PASSWORD_ENDPOINTS = [
+  // Option A
+  (userId) => ({
+    method: 'PATCH',
+    url: `/api/users/${encodeURIComponent(userId)}/password`,
+    body: (pw) => ({ password: pw }),
+  }),
+
+  // Option B
+  (userId) => ({
+    method: 'PATCH',
+    url: `/api/users/password`,
+    body: (pw) => ({ user_id: Number(userId), password: pw }),
+  }),
+
+  // Option C
+  (userId) => ({
+    method: 'PUT',
+    url: `/api/users/${encodeURIComponent(userId)}`,
+    body: (pw) => ({ password: pw }),
+  }),
+];
 
 /* =======================
    API HELPERS
@@ -92,19 +118,19 @@ async function apiPut(url, body) {
   return res.json();
 }
 
-async function apiPatch(url, body) {
+async function apiRequest(method, url, body) {
   const hasBody = body !== undefined;
   const res = await fetch(url, {
-    method: 'PATCH',
+    method,
     headers: hasBody ? { 'Content-Type': 'application/json' } : undefined,
     body: hasBody ? JSON.stringify(body) : undefined,
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`PATCH ${url} failed: ${res.status} ${text}`);
+    throw new Error(`${method} ${url} failed: ${res.status} ${text}`);
   }
-  // some backends return empty body; try json then fallback
+
   const ct = res.headers.get('content-type') || '';
   if (ct.includes('application/json')) return res.json();
   return { success: true };
@@ -128,12 +154,10 @@ function escapeAttr(str) {
 /* =======================
    STATE
 ======================= */
-let rolesDb = [];        // from /api/roles -> [{role_id, role_name}]
-let staffDb = [];        // from /api/users -> [{user_id,user_firstname,user_lastname,role}] where role=role_id
-let departmentsDb = [];  // from /api/departments
-let academicRowsDb = []; // rows for academic table (dept + course)
-
-// Removed students
+let rolesDb = [];
+let staffDb = [];
+let departmentsDb = [];
+let academicRowsDb = [];
 let removedStudentsDb = [];
 
 /* =======================
@@ -159,8 +183,8 @@ function getLoggedUser() {
 }
 
 function getLoggedUserId() {
-  const u = getLoggedUser();
-  const idVal = u?.user_id ?? u?.userId ?? u?.id ?? u?.userID ?? '';
+  const user = getLoggedUser();
+  const idVal = user?.user_id ?? user?.userId ?? user?.id ?? user?.userID ?? '';
   return String(idVal ?? '').trim();
 }
 
@@ -170,10 +194,13 @@ function applyLoggedUserToUI() {
 
   const sidebarNameEl = document.getElementById('user-role');
   if (sidebarNameEl) {
-    const fn = user.user_firstname ?? user.user_firstName ?? user.first_name ?? '';
-    const ln = user.user_lastname ?? user.user_lastName ?? user.last_name ?? '';
-    const fullName = `${fn} ${ln}`.trim();
-    sidebarNameEl.textContent = fullName || '';
+    const fn = user.user_firstname ?? user.user_firstName ?? user.first_name ?? user.user_firstName ?? '';
+    const ln = user.user_lastname ?? user.user_lastName ?? user.last_name ?? user.user_lastName ?? '';
+    // also keep backward compat with your older casing:
+    const altFn = user.user_firstName ?? '';
+    const altLn = user.user_lastName ?? '';
+    const name = `${fn || altFn} ${ln || altLn}`.trim();
+    sidebarNameEl.textContent = name || '';
   }
 
   const sidebarRoleEl = document.getElementById('user-role-label');
@@ -184,9 +211,11 @@ function applyLoggedUserToUI() {
 
   const accName = document.getElementById('acc-name');
   if (accName) {
-    const fn = user.user_firstname ?? user.user_firstName ?? user.first_name ?? '';
-    const ln = user.user_lastname ?? user.user_lastName ?? user.last_name ?? '';
-    accName.value = `${fn} ${ln}`.trim();
+    const fn = user.user_firstname ?? user.user_firstName ?? '';
+    const ln = user.user_lastname ?? user.user_lastName ?? '';
+    const altFn = user.user_firstName ?? '';
+    const altLn = user.user_lastName ?? '';
+    accName.value = `${fn || altFn} ${ln || altLn}`.trim();
   }
 
   const accId = document.getElementById('acc-id');
@@ -315,7 +344,8 @@ function renderStaff() {
           </span>
         </td>
         <td class="px-8 py-4 text-right">
-          <button disabled title="Add DELETE /api/users/:id to enable"
+          <!-- Delete modal removed as requested -->
+          <button disabled title="Delete modal removed"
             class="text-slate-200 cursor-not-allowed">
             <i data-lucide="user-minus" class="w-4 h-4"></i>
           </button>
@@ -352,7 +382,7 @@ async function saveStaff() {
     await apiPost('/api/users', {
       user_id: Number(userIdRaw),
       fullname,
-      password, // ✅ plaintext
+      password,
       role: String(roleIdRaw)
     });
 
@@ -449,7 +479,7 @@ function renderRemovedStudents() {
 }
 
 /* =======================
-   RESTORE CONFIRMATION MODAL (OPTIONAL)
+   RESTORE CONFIRMATION MODAL (YOUR EXISTING)
 ======================= */
 let pendingRestoreStudentId = null;
 
@@ -483,14 +513,12 @@ async function confirmRestoreStudent() {
 
   try {
     await restoreStudent(pendingRestoreStudentId);
+    await loadRemovedStudents();
   } finally {
     closeRestoreStudentModal();
   }
 }
 
-/* =======================
-   RESTORE ACTION (POST)
-======================= */
 async function restoreStudent(studentId) {
   if (!window.CURRENT_YEAR_SEMESTER_ID) {
     throw new Error("No active semester selected.");
@@ -514,7 +542,6 @@ async function loadDepartments() {
     departmentsDb = (data.success && Array.isArray(data.departments)) ? data.departments : [];
     renderDepartmentSelect();
     await loadAcademic();
-
     await loadRemovedStudents();
   } catch (err) {
     console.error('loadDepartments error:', err);
@@ -651,7 +678,6 @@ function buildPageButtons(current, total) {
 
 function renderAcademicPaginationUI() {
   const totalPages = getAcademicTotalPages();
-
   academicPager.page = Math.min(Math.max(1, academicPager.page), totalPages);
 
   const info = document.getElementById('academic-page-info');
@@ -664,7 +690,6 @@ function renderAcademicPaginationUI() {
   const endIndex = Math.min(academicPager.page * academicPager.pageSize, total);
 
   if (info) info.textContent = `Showing ${startIndex}-${endIndex} of ${total}`;
-
   if (prevBtn) prevBtn.disabled = academicPager.page <= 1;
   if (nextBtn) nextBtn.disabled = academicPager.page >= totalPages;
 
@@ -872,6 +897,398 @@ function toggleAcademicType(type) {
 }
 
 /* =======================
+   ACCOUNT (CHANGE PASSWORD) — INPUTS
+======================= */
+function getAccountPasswordInputs() {
+  const accIdEl = document.getElementById('acc-id');
+
+  const currentEl =
+    document.getElementById('acc-current-pass') ||
+    document.getElementById('current-password') ||
+    document.getElementById('acc-old-pass') ||
+    document.getElementById('old-password');
+
+  const newEl =
+    document.getElementById('acc-new-pass') ||
+    document.getElementById('new-password') ||
+    document.getElementById('acc-pass') ||
+    document.getElementById('password');
+
+  const confirmEl =
+    document.getElementById('acc-confirm-pass') ||
+    document.getElementById('confirm-password') ||
+    document.getElementById('acc-pass-confirm') ||
+    document.getElementById('password-confirm');
+
+  const userIdRaw = (accIdEl?.value ?? '').trim() || getLoggedUserId();
+
+  return {
+    userIdRaw,
+    currentPassword: (currentEl?.value ?? '').trim(),
+    newPassword: (newEl?.value ?? '').trim(),
+    confirmPassword: (confirmEl?.value ?? '').trim(),
+    currentEl,
+    newEl,
+    confirmEl,
+  };
+}
+
+/* =======================
+   CHANGE PASSWORD MODAL (FULL)
+======================= */
+let pendingChangePassword = { userId: null, newPassword: null, refs: null };
+
+function ensureChangePasswordModal() {
+  if (document.getElementById('change-pass-modal')) return;
+
+  if (!document.getElementById('change-pass-modal-styles')) {
+    const style = document.createElement('style');
+    style.id = 'change-pass-modal-styles';
+    style.textContent = `
+      .chgpw-overlay{
+        position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+        background:rgba(2,6,23,.55); backdrop-filter:blur(4px);
+        z-index:9999; padding:16px;
+      }
+      .chgpw-overlay.chgpw-open{display:flex;}
+      .chgpw-card{
+        width:min(560px,92vw); border-radius:18px; background:#fff;
+        box-shadow:0 20px 60px rgba(2,6,23,.35); overflow:hidden;
+        transform:translateY(6px) scale(.98); opacity:0;
+        animation:chgpw-pop .18s ease-out forwards;
+      }
+      @keyframes chgpw-pop{to{transform:translateY(0) scale(1); opacity:1;}}
+      .chgpw-head{
+        display:flex; gap:12px; align-items:flex-start; padding:18px 18px 10px;
+        background:linear-gradient(180deg, rgba(59,130,246,.10), rgba(59,130,246,0));
+      }
+      .chgpw-icon{
+        width:44px; height:44px; border-radius:14px; display:grid; place-items:center;
+        background:rgba(59,130,246,.12); color:rgb(37,99,235); flex:0 0 auto;
+      }
+      .chgpw-title{font-weight:900; font-size:16px; color:#0f172a; margin:0; line-height:1.2;}
+      .chgpw-sub{margin:6px 0 0; font-size:12px; color:#475569; line-height:1.5;}
+      .chgpw-x{
+        margin-left:auto; border:0; background:transparent; cursor:pointer;
+        padding:8px; border-radius:12px; color:#475569;
+      }
+      .chgpw-x:hover{background:rgba(15,23,42,.06);}
+      .chgpw-body{padding:0 18px 16px;}
+      .chgpw-meta{
+        margin-top:10px; border:1px solid #e2e8f0; background:#f8fafc;
+        border-radius:14px; padding:12px; display:grid; gap:10px;
+      }
+      .chgpw-row{display:flex; justify-content:space-between; gap:12px; font-size:12px; align-items:center;}
+      .chgpw-label{color:#64748b; font-weight:800; text-transform:uppercase; font-size:10px; letter-spacing:.06em;}
+      .chgpw-value{color:#0f172a; font-weight:900;}
+      .chgpw-pill{
+        padding:6px 10px; border-radius:999px; font-size:10px; font-weight:900;
+        background:#e2e8f0; color:#0f172a; letter-spacing:.06em; text-transform:uppercase;
+      }
+      .chgpw-status{
+        margin-top:10px;
+        border-radius:14px;
+        padding:10px 12px;
+        font-size:12px;
+        display:none;
+        border:1px solid #e2e8f0;
+        background:#fff;
+        color:#0f172a;
+        line-height:1.4;
+        white-space:pre-line;
+      }
+      .chgpw-status.chgpw-show{display:block;}
+      .chgpw-actions{padding:14px 18px 18px; display:flex; justify-content:flex-end; gap:10px;}
+      .chgpw-btn{border:0; cursor:pointer; border-radius:14px; padding:10px 14px; font-size:12px; font-weight:900; letter-spacing:.02em;}
+      .chgpw-cancel{background:#e2e8f0; color:#0f172a;}
+      .chgpw-cancel:hover{background:#cbd5e1;}
+      .chgpw-primary{background:#2563eb; color:#fff;}
+      .chgpw-primary:hover{filter:brightness(.95);}
+      .chgpw-primary:disabled{opacity:.6; cursor:not-allowed;}
+      .chgpw-ok{background:#16a34a; color:#fff;}
+      .chgpw-ok:hover{filter:brightness(.95);}
+    `;
+    document.head.appendChild(style);
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'change-pass-modal';
+  overlay.className = 'chgpw-overlay hidden';
+  overlay.innerHTML = `
+    <div class="chgpw-card" role="dialog" aria-modal="true" aria-labelledby="chgpw-title">
+      <div class="chgpw-head">
+        <div class="chgpw-icon">
+          <i data-lucide="key-round" class="w-4 h-4"></i>
+        </div>
+
+        <div>
+          <h3 id="chgpw-title" class="chgpw-title">Update password</h3>
+          <p class="chgpw-sub">
+            Please confirm you want to update the account password.
+          </p>
+        </div>
+
+        <button class="chgpw-x" type="button" aria-label="Close" id="chgpw-close-btn">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="chgpw-body">
+        <div class="chgpw-meta">
+          <div class="chgpw-row">
+            <span class="chgpw-label">User ID</span>
+            <span class="chgpw-value" id="chgpw-user-id">—</span>
+          </div>
+          <div class="chgpw-row">
+            <span class="chgpw-label">New password</span>
+            <span class="chgpw-pill" id="chgpw-pw-mask">••••••</span>
+          </div>
+        </div>
+
+        <div class="chgpw-status" id="chgpw-status"></div>
+      </div>
+
+      <div class="chgpw-actions">
+        <button class="chgpw-btn chgpw-cancel" type="button" id="chgpw-cancel-btn">Cancel</button>
+        <button class="chgpw-btn chgpw-primary" type="button" id="chgpw-confirm-btn">Confirm</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = () => closeChangePasswordModal();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.getElementById('chgpw-close-btn')?.addEventListener('click', close);
+  document.getElementById('chgpw-cancel-btn')?.addEventListener('click', close);
+  document.getElementById('chgpw-confirm-btn')?.addEventListener('click', () => {
+    confirmChangePasswordModal().catch(() => {});
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const m = document.getElementById('change-pass-modal');
+      if (m && !m.classList.contains('hidden')) close();
+    }
+  });
+
+  lucide.createIcons();
+}
+
+function setChangePasswordStatus(message, kind = 'info') {
+  const box = document.getElementById('chgpw-status');
+  if (!box) return;
+
+  box.textContent = message ?? '';
+  box.classList.add('chgpw-show');
+
+  if (kind === 'error') {
+    box.style.borderColor = 'rgba(239,68,68,.35)';
+    box.style.background = 'rgba(239,68,68,.06)';
+  } else if (kind === 'success') {
+    box.style.borderColor = 'rgba(22,163,74,.35)';
+    box.style.background = 'rgba(22,163,74,.06)';
+  } else if (kind === 'loading') {
+    box.style.borderColor = 'rgba(37,99,235,.25)';
+    box.style.background = 'rgba(37,99,235,.05)';
+  } else {
+    box.style.borderColor = '#e2e8f0';
+    box.style.background = '#fff';
+  }
+}
+
+function clearChangePasswordStatus() {
+  const box = document.getElementById('chgpw-status');
+  if (!box) return;
+  box.textContent = '';
+  box.classList.remove('chgpw-show');
+  box.style.borderColor = '#e2e8f0';
+  box.style.background = '#fff';
+}
+
+function openChangePasswordModal({ userId, newPassword, refs }) {
+  ensureChangePasswordModal();
+
+  pendingChangePassword = {
+    userId: String(userId ?? '').trim(),
+    newPassword: String(newPassword ?? ''),
+    refs: refs || null,
+  };
+
+  const idEl = document.getElementById('chgpw-user-id');
+  const maskEl = document.getElementById('chgpw-pw-mask');
+  if (idEl) idEl.textContent = pendingChangePassword.userId || '—';
+  if (maskEl) {
+    const len = Math.max(4, Math.min(12, pendingChangePassword.newPassword.length || 6));
+    maskEl.textContent = '•'.repeat(len);
+  }
+
+  clearChangePasswordStatus();
+
+  const confirmBtn = document.getElementById('chgpw-confirm-btn');
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Confirm';
+    confirmBtn.classList.remove('chgpw-ok');
+    confirmBtn.classList.add('chgpw-primary');
+    confirmBtn.onclick = null;
+  }
+
+  const modal = document.getElementById('change-pass-modal');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  modal.classList.add('chgpw-open');
+  lucide.createIcons();
+}
+
+function closeChangePasswordModal() {
+  pendingChangePassword = { userId: null, newPassword: null, refs: null };
+
+  const modal = document.getElementById('change-pass-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('chgpw-open');
+}
+
+async function confirmChangePasswordModal() {
+  const userIdRaw = pendingChangePassword.userId;
+  const newPassword = pendingChangePassword.newPassword;
+
+  if (!userIdRaw || !/^\d+$/.test(String(userIdRaw))) {
+    setChangePasswordStatus('Invalid user_id. Please check your Account ID field.', 'error');
+    return;
+  }
+  if (!newPassword) {
+    setChangePasswordStatus('New password is empty. Please type a new password first.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('chgpw-confirm-btn');
+  if (btn) btn.disabled = true;
+
+  try {
+    setChangePasswordStatus('Updating password…', 'loading');
+
+    await changePasswordPlaintext(Number(userIdRaw), newPassword);
+
+    setChangePasswordStatus('Password updated successfully.', 'success');
+
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Done';
+      btn.classList.remove('chgpw-primary');
+      btn.classList.add('chgpw-ok');
+      btn.onclick = () => closeChangePasswordModal();
+    }
+
+    const refs = pendingChangePassword.refs;
+    if (refs?.currentEl) refs.currentEl.value = '';
+    if (refs?.newEl) refs.newEl.value = '';
+    if (refs?.confirmEl) refs.confirmEl.value = '';
+  } catch (err) {
+    console.error('confirmChangePasswordModal error:', err);
+    setChangePasswordStatus(
+      'Failed to change password.\n' +
+      'Make sure your backend has one of these:\n' +
+      '1) PATCH /api/users/:id/password\n' +
+      '2) PATCH /api/users/password\n' +
+      '3) PUT /api/users/:id\n',
+      'error'
+    );
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Confirm';
+    }
+  }
+}
+
+async function changePasswordPlaintext(userId, newPassword) {
+  let lastErr = null;
+
+  for (const make of CHANGE_PASSWORD_ENDPOINTS) {
+    const ep = make(userId);
+    try {
+      const payload = ep.body(newPassword);
+      const resp = await apiRequest(ep.method, ep.url, payload);
+
+      if (resp && typeof resp === 'object' && resp.success === false) {
+        throw new Error(resp.message || 'Password update failed');
+      }
+
+      return resp;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw lastErr || new Error('Password update failed');
+}
+
+/* =======================
+   ACCOUNT SUBMIT HANDLER — OPENS MODAL
+======================= */
+async function updateAccount(e) {
+  e.preventDefault();
+
+  const {
+    userIdRaw,
+    newPassword,
+    confirmPassword,
+    currentEl,
+    newEl,
+    confirmEl
+  } = getAccountPasswordInputs();
+
+  if (!userIdRaw) {
+    openChangePasswordModal({
+      userId: '',
+      newPassword: '',
+      refs: { currentEl, newEl, confirmEl },
+    });
+    setChangePasswordStatus('Missing user_id. Please make sure #acc-id is filled.', 'error');
+    return;
+  }
+
+  if (!/^\d+$/.test(String(userIdRaw))) {
+    openChangePasswordModal({
+      userId: userIdRaw,
+      newPassword: '',
+      refs: { currentEl, newEl, confirmEl },
+    });
+    setChangePasswordStatus('user_id must be numeric (INT in your database).', 'error');
+    return;
+  }
+
+  if (!newPassword) {
+    openChangePasswordModal({
+      userId: userIdRaw,
+      newPassword: '',
+      refs: { currentEl, newEl, confirmEl },
+    });
+    setChangePasswordStatus('Please enter your new password.', 'error');
+    newEl?.focus?.();
+    return;
+  }
+
+  if (confirmEl && confirmPassword !== newPassword) {
+    openChangePasswordModal({
+      userId: userIdRaw,
+      newPassword,
+      refs: { currentEl, newEl, confirmEl },
+    });
+    setChangePasswordStatus('New password and confirm password do not match.', 'error');
+    confirmEl?.focus?.();
+    return;
+  }
+
+  openChangePasswordModal({
+    userId: userIdRaw,
+    newPassword,
+    refs: { currentEl, newEl, confirmEl },
+  });
+}
+
+/* =======================
    UTILITIES
 ======================= */
 function toggleModal(id) {
@@ -889,76 +1306,6 @@ function toggleModal(id) {
 }
 
 /* =======================
-   ACCOUNT: CHANGE PASSWORD
-   - Uses #acc-id for user_id
-   - Uses #acc-new-pass and #acc-confirm-pass if present
-   - If your HTML uses different IDs, rename below OR tell me your HTML ids.
-======================= */
-async function updateAccount(e) {
-  e.preventDefault();
-
-  const userIdRaw = (document.getElementById('acc-id')?.value ?? '').trim() || getLoggedUserId();
-  const newPassEl =
-    document.getElementById('acc-new-pass') ||
-    document.getElementById('acc-pass') ||
-    document.getElementById('new-password') ||
-    document.getElementById('password');
-
-  const confirmEl =
-    document.getElementById('acc-confirm-pass') ||
-    document.getElementById('confirm-password') ||
-    document.getElementById('password-confirm');
-
-  const newPassword = (newPassEl?.value ?? '').trim();
-  const confirmPassword = (confirmEl?.value ?? '').trim();
-
-  if (!userIdRaw) {
-    alert('Missing user_id. Make sure #acc-id is filled.');
-    return;
-  }
-
-  if (!/^\d+$/.test(String(userIdRaw))) {
-    alert('User ID must be numeric because user_id is INT in your database.');
-    return;
-  }
-
-  if (!newPassword) {
-    alert('Please enter your new password.');
-    newPassEl?.focus?.();
-    return;
-  }
-
-  // Only validate confirm if confirm input exists
-  if (confirmEl && confirmPassword !== newPassword) {
-    alert('New password and confirm password do not match.');
-    confirmEl?.focus?.();
-    return;
-  }
-
-  try {
-    const resp = await apiPatch(CHANGE_PASSWORD_URL(userIdRaw), { password: newPassword });
-
-    // if backend returns {success:false}
-    if (resp && typeof resp === 'object' && resp.success === false) {
-      throw new Error(resp.message || 'Password update failed');
-    }
-
-    alert('Password updated successfully.');
-
-    if (newPassEl) newPassEl.value = '';
-    if (confirmEl) confirmEl.value = '';
-  } catch (err) {
-    console.error('updateAccount(change password) error:', err);
-    alert(
-      'Failed to change password.\n\n' +
-      'Make sure your backend route exists:\n' +
-      'PATCH /api/users/:id/password  body: { password }\n\n' +
-      'And your server accepts plaintext passwords.'
-    );
-  }
-}
-
-/* =======================
    INIT
 ======================= */
 window.addEventListener('load', async () => {
@@ -966,12 +1313,14 @@ window.addEventListener('load', async () => {
     applyLoggedUserToUI();
     bindAcademicPaginationEvents();
 
+    // Inject change password modal early
+    ensureChangePasswordModal();
+
     await loadRoles();
     await loadStaff();
     await loadDepartments(); // loads academic + removed students
 
-    // If your account form exists, bind submit handler.
-    // If you already call updateAccount from HTML (onsubmit), this won't break.
+    // bind account form
     const accForm =
       document.getElementById('account-form') ||
       document.querySelector('form[data-account-form="true"]') ||

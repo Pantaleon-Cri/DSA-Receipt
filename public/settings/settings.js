@@ -1209,6 +1209,9 @@ function ensureChangePasswordModal() {
             <span class="chgpw-label">New password</span>
             <span class="chgpw-pill" id="chgpw-pw-mask">••••••</span>
           </div>
+
+         
+        </div>
           <div class="chgpw-row">
 
 
